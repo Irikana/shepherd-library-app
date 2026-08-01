@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "牧羊人图书馆管理",
+    "slug": "shepherd-library-app",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "scheme": "shepherd-library",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "io.github.irikana.shepherdlibrary",
+      "adaptiveIcon": {
+        "backgroundColor": "#2c3e50"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "server"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "tsconfigPaths": true
+    }
+  }
+}
