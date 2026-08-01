@@ -78,14 +78,13 @@ function patchDomWebview() {
     '    versionName "' + version + '"\n' +
     "  }\n" +
     "}\n\n" +
-    "// Dependencies for Expo module compilation (no apply from: to avoid path issues)\n" +
-    "dependencies {\n" +
-    "  implementation project(':expo-modules-core')\n" +
-    "  implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24'\n" +
-    "}\n";
+    "// Apply Expo modules core configuration (use rootProject.projectDir for correct path)\n" +
+    "apply from: \"${rootProject.projectDir}/../node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle\"\n" +
+    "applyKotlinExpoModulesCorePlugin()\n" +
+    "useCoreDependencies()\n";
 
   fs.writeFileSync(filePath, fixedContent, 'utf8');
-  log('PATCHED: @expo/dom-webview/android/build.gradle (added kotlin-android + direct dependencies)');
+  log('PATCHED: @expo/dom-webview/android/build.gradle (added kotlin-android + fixed apply from: path)');
 }
 
 // --- Patch 2: expo-modules-core/android/ExpoModulesCorePlugin.gradle ---
