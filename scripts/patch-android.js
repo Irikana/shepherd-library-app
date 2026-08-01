@@ -3,8 +3,9 @@
  * 
  * Patches:
  * 1. @expo/dom-webview/android/build.gradle:
- *    - Remove expo-module-gradle-plugin (not available in standalone build)
- *    - Add explicit SDK version config (plugin provided these via useDefaultAndroidSdkVersions)
+ *    - Add kotlin-android plugin (DomWebViewModule is Kotlin, needs Kotlin compiler)
+ *    - Add expo-modules-core dependency
+ *    - Add explicit SDK version config
  *    Strategy: overwrite entire file with known-good content (most robust)
  * 
  * 2. expo-modules-core/android/ExpoModulesCorePlugin.gradle:
@@ -19,7 +20,7 @@ function log(msg) {
 }
 
 // --- Patch 1: @expo/dom-webview/android/build.gradle ---
-// Strategy: overwrite entire file with known-good content
+// Strategy: overwrite entire file with known-good content including Kotlin plugin
 function patchDomWebview() {
   const filePath = path.join(__dirname, '..', 'node_modules', '@expo', 'dom-webview', 'android', 'build.gradle');
   
@@ -48,15 +49,26 @@ function patchDomWebview() {
   const namespaceMatch = original.match(/namespace\s+["']([^"']+)["']/);
   if (namespaceMatch) namespace = namespaceMatch[1];
 
-  // Write the fixed content
-  const fixedContent = "plugins {\n" +
+  // Check if kotlin-android is already in the plugins block
+  if (original.includes('kotlin-android')) {
+    log('SKIP: kotlin-android already present in dom-webview build.gradle');
+    // Still check if dependencies are present
+    if (original.includes('expo-modules-core')) {
+      log('SKIP: expo-modules-core dependency already present');
+      return;
+    }
+  }
+
+  // Write the fixed content with Kotlin plugin and Expo dependencies
+  var fixedContent = "plugins {\n" +
     "  id 'com.android.library'\n" +
+    "  id 'kotlin-android'\n" +
     "}\n\n" +
     "group = '" + groupName + "'\n" +
     "version = '" + version + "'\n\n" +
     "android {\n" +
     '  namespace "' + namespace + '"\n\n' +
-    "  // SDK versions (normally provided by expo-module-gradle-plugin via useDefaultAndroidSdkVersions)\n" +
+    "  // SDK versions\n" +
     "  compileSdkVersion rootProject.ext.compileSdkVersion\n" +
     "  buildToolsVersion rootProject.ext.buildToolsVersion\n\n" +
     "  defaultConfig {\n" +
@@ -65,10 +77,14 @@ function patchDomWebview() {
     "    versionCode 1\n" +
     '    versionName "' + version + '"\n' +
     "  }\n" +
-    "}\n";
+    "}\n\n" +
+    "// Apply Expo modules core configuration\n" +
+    "apply from: '${project.rootDir}/../node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle'\n" +
+    "applyKotlinExpoModulesCorePlugin()\n" +
+    "useCoreDependencies()\n";
 
   fs.writeFileSync(filePath, fixedContent, 'utf8');
-  log('PATCHED: @expo/dom-webview/android/build.gradle (version=' + version + ', group=' + groupName + ', namespace=' + namespace + ')');
+  log('PATCHED: @expo/dom-webview/android/build.gradle (added kotlin-android + expo config)');
 }
 
 // --- Patch 2: expo-modules-core/android/ExpoModulesCorePlugin.gradle ---
@@ -82,10 +98,6 @@ function patchExpoModulesCore() {
   }
 
   let content = fs.readFileSync(filePath, 'utf8');
-  log('Original ExpoModulesCorePlugin.gradle (first 30 lines):');
-  content.split('\n').slice(0, 30).forEach((line, i) => {
-    console.log('  ' + (i + 1) + ': ' + line);
-  });
 
   // Check if already patched
   if (content.includes("findByName('release')") || content.includes('findByName("release")')) {
@@ -94,11 +106,10 @@ function patchExpoModulesCore() {
   }
 
   // Strategy: find release(MavenPublication) { ... from components.release ... } and wrap it
-  const releaseRegex = /(\s*)release\s*\(\s*MavenPublication\s*\)\s*\{([\s\S]*?)from\s+components\.release([\s\S]*?)\}/;
+  var releaseRegex = /(\s*)release\s*\(\s*MavenPublication\s*\)\s*\{([\s\S]*?)from\s+components\.release([\s\S]*?)\}/;
   
   if (releaseRegex.test(content)) {
     content = content.replace(releaseRegex, function(match, indent1, inner1, inner2) {
-      var innerIndent = indent1 + '  ';
       return indent1 + "if (components.findByName('release') != null) {" +
         indent1 + "  release(MavenPublication) {" +
         inner1 + "  from components.release" +
@@ -162,20 +173,19 @@ function patchExpoModulesCore() {
       log('PATCHED: ExpoModulesCorePlugin.gradle (line-by-line fallback)');
     } else {
       log('WARNING: Could not find release(MavenPublication) block in ExpoModulesCorePlugin.gradle');
-      log('This may be OK if the file structure has changed.');
     }
   }
 }
 
 // --- Scan for other modules using expo-module-gradle-plugin ---
-function scanForGradlePlugin(dir, label) {
+function scanForGradlePlugin(dir) {
   if (!fs.existsSync(dir)) return;
   var entries = fs.readdirSync(dir, { withFileTypes: true });
   for (var i = 0; i < entries.length; i++) {
     var entry = entries[i];
     var fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      scanForGradlePlugin(fullPath, label);
+      scanForGradlePlugin(fullPath);
     } else if (entry.name.endsWith('.gradle')) {
       var content = fs.readFileSync(fullPath, 'utf8');
       if (content.includes('expo-module-gradle-plugin')) {
@@ -209,7 +219,6 @@ patchExpoModulesCore();
 log('Scanning for other modules using expo-module-gradle-plugin...');
 var nodeModulesDir = path.join(__dirname, '..', 'node_modules');
 
-// Check @expo packages
 var expoPackagesDir = path.join(nodeModulesDir, '@expo');
 if (fs.existsSync(expoPackagesDir)) {
   var packages = fs.readdirSync(expoPackagesDir);
@@ -226,12 +235,6 @@ if (fs.existsSync(expoPackagesDir)) {
             '$1\n  compileSdkVersion rootProject.ext.compileSdkVersion\n  buildToolsVersion rootProject.ext.buildToolsVersion'
           );
         }
-        if (!fixed.includes('minSdkVersion') && fixed.includes('defaultConfig {')) {
-          fixed = fixed.replace(
-            /(defaultConfig\s*\{)/,
-            '$1\n    minSdkVersion rootProject.ext.minSdkVersion\n    targetSdkVersion rootProject.ext.targetSdkVersion'
-          );
-        }
         fs.writeFileSync(gradlePath, fixed, 'utf8');
         log('  PATCHED: @expo/' + packages[i] + '/android/build.gradle');
       }
@@ -239,7 +242,6 @@ if (fs.existsSync(expoPackagesDir)) {
   }
 }
 
-// Check expo-modules-core/android directory recursively
-scanForGradlePlugin(path.join(nodeModulesDir, 'expo-modules-core', 'android'), 'expo-modules-core');
+scanForGradlePlugin(path.join(nodeModulesDir, 'expo-modules-core', 'android'));
 
 log('Done.');
