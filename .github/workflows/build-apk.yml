@@ -29,8 +29,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify patches
+        run: |
+          echo "Checking @expo/dom-webview patch..."
+          if grep -q "expo-module-gradle-plugin" node_modules/@expo/dom-webview/android/build.gradle; then
+            echo "ERROR: patch not applied!"
+            exit 1
+          else
+            echo "OK: dom-webview patched"
+          fi
+          echo "Checking ExpoModulesCorePlugin patch..."
+          if grep -q "findByName" node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle; then
+            echo "OK: ExpoModulesCorePlugin patched"
+          else
+            echo "ERROR: patch not applied!"
+            exit 1
+          fi
+
       - name: Generate native Android project
-        run: npx expo prebuild --platform android --no-install
+        run: npx expo prebuild --platform android --no-install --clean
 
       - name: Build Debug APK
         working-directory: android
