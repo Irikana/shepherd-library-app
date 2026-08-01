@@ -29,20 +29,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Apply Android build patches
+        run: node scripts/patch-android.js
+
       - name: Verify patches
         run: |
           echo "Checking @expo/dom-webview patch..."
           if grep -q "expo-module-gradle-plugin" node_modules/@expo/dom-webview/android/build.gradle; then
-            echo "ERROR: patch not applied!"
+            echo "ERROR: dom-webview still has expo-module-gradle-plugin!"
             exit 1
           else
-            echo "OK: dom-webview patched"
+            echo "OK: dom-webview plugin removed"
+          fi
+          if grep -q "compileSdkVersion" node_modules/@expo/dom-webview/android/build.gradle; then
+            echo "OK: dom-webview has SDK versions"
+          else
+            echo "ERROR: dom-webview missing SDK versions!"
+            exit 1
           fi
           echo "Checking ExpoModulesCorePlugin patch..."
           if grep -q "findByName" node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle; then
             echo "OK: ExpoModulesCorePlugin patched"
           else
-            echo "ERROR: patch not applied!"
+            echo "ERROR: ExpoModulesCorePlugin not patched!"
             exit 1
           fi
 
