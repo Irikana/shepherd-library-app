@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Postinstall patch: fix Expo SDK 52 Android build issues
  * 
  * Patches:
@@ -211,8 +211,26 @@ function scanForGradlePlugin(dir) {
   }
 }
 
+// --- Patch 0: Exclude @expo/dom-webview from autolinking ---
+// @expo/dom-webview v57 uses OptimizedRecord which doesn't exist in Expo SDK 52's expo-modules-core
+// Our app uses react-native-webview instead, so we don't need this native module
+function excludeDomWebviewFromAutolinking() {
+  var configPath = path.join(__dirname, '..', 'node_modules', '@expo', 'dom-webview', 'expo-module.config.json');
+  
+  if (!fs.existsSync(configPath)) {
+    log('SKIP: @expo/dom-webview/expo-module.config.json not found (already excluded or not installed)');
+    return;
+  }
+  
+  // Rename to .bak so expo prebuild won't autolink it
+  var bakPath = configPath + '.bak';
+  fs.renameSync(configPath, bakPath);
+  log('EXCLUDED: @expo/dom-webview from autolinking (renamed expo-module.config.json to .bak)');
+}
+
 // --- Main ---
 log('Applying Android build fixes...');
+excludeDomWebviewFromAutolinking();
 patchDomWebview();
 patchExpoModulesCore();
 
