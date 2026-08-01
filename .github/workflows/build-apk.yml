@@ -29,67 +29,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Show pre-patch file contents
-        run: |
-          echo "=== @expo/dom-webview/android/build.gradle ==="
-          if [ -f "node_modules/@expo/dom-webview/android/build.gradle" ]; then
-            cat node_modules/@expo/dom-webview/android/build.gradle
-          else
-            echo "FILE NOT FOUND - @expo/dom-webview may not be installed"
-            echo "Checking if package exists in node_modules..."
-            ls -la node_modules/@expo/ 2>/dev/null || echo "No @expo directory"
-          fi
-          echo ""
-          echo "=== expo-modules-core/android/ExpoModulesCorePlugin.gradle ==="
-          if [ -f "node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle" ]; then
-            cat node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
-          else
-            echo "FILE NOT FOUND"
-          fi
-          echo ""
-          echo "=== Package versions ==="
-          cat node_modules/@expo/dom-webview/package.json 2>/dev/null | grep '"version"' | head -1 || echo "dom-webview not found"
-          cat node_modules/expo-modules-core/package.json 2>/dev/null | grep '"version"' | head -1 || echo "expo-modules-core not found"
-
-      - name: Apply Android build patches
+      - name: Apply Android build patches (@expo/dom-webview SDK 52 compat)
         run: node scripts/patch-android.js
-
-      - name: Show post-patch file contents
-        run: |
-          echo "=== @expo/dom-webview/android/build.gradle (after patch) ==="
-          if [ -f "node_modules/@expo/dom-webview/android/build.gradle" ]; then
-            cat node_modules/@expo/dom-webview/android/build.gradle
-          else
-            echo "FILE NOT FOUND"
-          fi
-          echo ""
-          echo "=== expo-modules-core/android/ExpoModulesCorePlugin.gradle (after patch) ==="
-          if [ -f "node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle" ]; then
-            cat node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
-          else
-            echo "FILE NOT FOUND"
-          fi
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install --clean
 
-      - name: Patch generated native project
-        run: |
-          echo "=== Checking for expo-module-gradle-plugin in generated project ==="
-          grep -r "expo-module-gradle-plugin" android/ 2>/dev/null && echo "FOUND - needs patching" || echo "Not found in generated project"
-          
-          echo "=== Checking for compileSdkVersion in build.gradle ==="
-          cat android/build.gradle | grep -E "compileSdkVersion|buildToolsVersion|minSdkVersion|targetSdkVersion" || echo "No SDK versions in root build.gradle"
-          echo ""
-          cat android/app/build.gradle | grep -E "compileSdkVersion|buildToolsVersion|minSdkVersion|targetSdkVersion" || echo "No SDK versions in app build.gradle"
-
-      - name: Build Debug APK
+      - name: Build Release APK (self-contained JS bundle)
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: shepherd-library-app-v0.0.1
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: shepherd-library-app-v0.0.1-release
+          path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
