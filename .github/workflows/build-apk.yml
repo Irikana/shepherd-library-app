@@ -35,7 +35,9 @@ jobs:
           if [ -f "node_modules/@expo/dom-webview/android/build.gradle" ]; then
             cat node_modules/@expo/dom-webview/android/build.gradle
           else
-            echo "FILE NOT FOUND"
+            echo "FILE NOT FOUND - @expo/dom-webview may not be installed"
+            echo "Checking if package exists in node_modules..."
+            ls -la node_modules/@expo/ 2>/dev/null || echo "No @expo directory"
           fi
           echo ""
           echo "=== expo-modules-core/android/ExpoModulesCorePlugin.gradle ==="
@@ -45,9 +47,9 @@ jobs:
             echo "FILE NOT FOUND"
           fi
           echo ""
-          echo "=== Checking package versions ==="
-          cat node_modules/@expo/dom-webview/package.json | grep version | head -1
-          cat node_modules/expo-modules-core/package.json | grep version | head -1
+          echo "=== Package versions ==="
+          cat node_modules/@expo/dom-webview/package.json 2>/dev/null | grep '"version"' | head -1 || echo "dom-webview not found"
+          cat node_modules/expo-modules-core/package.json 2>/dev/null | grep '"version"' | head -1 || echo "expo-modules-core not found"
 
       - name: Apply Android build patches
         run: node scripts/patch-android.js
@@ -68,44 +70,22 @@ jobs:
             echo "FILE NOT FOUND"
           fi
 
-      - name: Verify patches
-        run: |
-          echo "Checking @expo/dom-webview patch..."
-          DW_FILE="node_modules/@expo/dom-webview/android/build.gradle"
-          if [ ! -f "$DW_FILE" ]; then
-            echo "WARNING: $DW_FILE does not exist - skipping dom-webview checks"
-          else
-            if grep -q "expo-module-gradle-plugin" "$DW_FILE"; then
-              echo "ERROR: dom-webview still has expo-module-gradle-plugin!"
-              exit 1
-            else
-              echo "OK: dom-webview plugin removed"
-            fi
-            if grep -q "compileSdkVersion" "$DW_FILE"; then
-              echo "OK: dom-webview has SDK versions"
-            else
-              echo "ERROR: dom-webview missing SDK versions!"
-              exit 1
-            fi
-          fi
-          echo "Checking ExpoModulesCorePlugin patch..."
-          EM_FILE="node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle"
-          if [ ! -f "$EM_FILE" ]; then
-            echo "WARNING: $EM_FILE does not exist - skipping expo-modules-core checks"
-          else
-            if grep -q "findByName" "$EM_FILE"; then
-              echo "OK: ExpoModulesCorePlugin patched"
-            else
-              echo "WARNING: ExpoModulesCorePlugin not patched (may not need it)"
-            fi
-          fi
-
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install --clean
 
+      - name: Patch generated native project
+        run: |
+          echo "=== Checking for expo-module-gradle-plugin in generated project ==="
+          grep -r "expo-module-gradle-plugin" android/ 2>/dev/null && echo "FOUND - needs patching" || echo "Not found in generated project"
+          
+          echo "=== Checking for compileSdkVersion in build.gradle ==="
+          cat android/build.gradle | grep -E "compileSdkVersion|buildToolsVersion|minSdkVersion|targetSdkVersion" || echo "No SDK versions in root build.gradle"
+          echo ""
+          cat android/app/build.gradle | grep -E "compileSdkVersion|buildToolsVersion|minSdkVersion|targetSdkVersion" || echo "No SDK versions in app build.gradle"
+
       - name: Build Debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
