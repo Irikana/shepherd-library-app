@@ -27,9 +27,49 @@ export function defaultCategoryForType(articleType: string): ArticleCategory {
   return ARTICLE_CATEGORIES.find((c) => c.key === 'normal')!;
 }
 
+/** JS 字符串上下文转义（library-dynamic.js 的 Search.data 条目） */
+function escapeJsString(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ');
+}
+
 /**
- * 在 library.html（中文版）或 en/library/library.html（英文版）的对应分类列表中插入文章链接；
- * 已存在或找不到锚点时返回原样
+ * 在 js/library-dynamic.js 的 Search.data 数组中插入搜索条目（站内搜索可找到）
+ * 已存在相同 urlPath 的条目时返回原样；找不到 data: [ 时返回原样
+ * @param js library-dynamic.js 内容
+ * @param entry.title 显示标题（中文）
+ * @param entry.keywords 搜索关键词（空格分隔）
+ * @param entry.urlPath 相对站点根的路径，如 library/paper/xxx.html
+ */
+export function insertSearchEntry(
+  js: string,
+  entry: { title: string; keywords: string; urlPath: string },
+): string {
+  const marker = 'data: [';
+  const idx = js.indexOf(marker);
+  if (idx < 0) return js;
+  // 防重复：urlPath 已存在于搜索数据中
+  const urlPattern = `ROOT+'${entry.urlPath}'`;
+  if (js.includes(urlPattern)) return js;
+  const line = `      {t:'${escapeJsString(entry.title)}',u:toAbs(ROOT+'${entry.urlPath}'),k:'${escapeJsString(entry.keywords)}'},`;
+  return js.slice(0, idx + marker.length) + '\n' + line + js.slice(idx + marker.length);
+}
+
+/**
+ * 构建搜索关键词：中文标题 + 英文标题 + 文章性质 + 标签
+ */
+export function buildSearchKeywords(form: {
+  title: string;
+  titleEn: string;
+  articleType: string;
+  tags: string[];
+}): string {
+  return [form.title, form.titleEn, form.articleType, ...(form.tags ?? [])]
+    .filter((s) => !!s && s !== '无')
+    .join(' ');
+}
+
+/**
+ * 在 library.html 的对应分类列表中插入文章链接；已存在或找不到锚点时返回原样
  * @param html library.html 内容
  * @param category 目标分类
  * @param fileName 文件名（如 a-new-article.html）

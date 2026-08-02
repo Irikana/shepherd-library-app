@@ -197,6 +197,19 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
         />
       </View>
 
+      {/* 隐藏开关 */}
+      <View style={s.switchRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.label}>隐藏文章</Text>
+          <Text style={s.hint}>隐藏后不同步 library.html 与新闻等公开列表，仅可通过站内搜索（查找按钮）找到</Text>
+        </View>
+        <Switch
+          value={form.hidden}
+          onValueChange={(v) => setField('hidden', v)}
+          trackColor={{ false: colors.border, true: colors.accent }}
+        />
+      </View>
+
       {/* 附加区块（如新闻发布页的新闻选项） */}
       {extra}
 

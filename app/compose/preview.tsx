@@ -10,8 +10,10 @@ import { PREVIEW_BASE_URL } from '../../src/lib/site-style';
 import { validateArticleHtml } from '../../src/templates/validators';
 import {
   ARTICLE_CATEGORIES,
+  buildSearchKeywords,
   defaultCategoryForType,
   insertIntoLibraryHtml,
+  insertSearchEntry,
   type ArticleCategory,
 } from '../../src/lib/article-sync';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
@@ -53,7 +55,9 @@ export default function PreviewScreen() {
 
     Alert.alert(
       '确认上传',
-      `分类：${category.label}\n将创建/更新文件：\nlibrary/${filePath}\n\n并同步更新 library.html 文章列表。\n\n提交后约 1-2 分钟 GitHub Pages 生效。`,
+      form.hidden
+        ? `分类：${category.label}（隐藏）\n将创建/更新文件：\nlibrary/${filePath}\n\n隐藏文章：不显示在 library.html 列表与新闻，仅加入站内搜索数据（查找按钮可找到）。\n\n提交后约 1-2 分钟 GitHub Pages 生效。`
+        : `分类：${category.label}\n将创建/更新文件：\nlibrary/${filePath}\n\n并同步更新 library.html（中文/英文）文章列表与站内搜索数据。\n\n提交后约 1-2 分钟 GitHub Pages 生效。`,
       [
         { text: '取消', style: 'cancel' },
         {
@@ -66,43 +70,67 @@ export default function PreviewScreen() {
                 message: `上传文章：${title}（移动端 App）`,
               });
 
-              // 同步 library.html：把文章加入对应分类列表
-              let librarySynced = false;
+              // 站内搜索数据同步（js/library-dynamic.js 的 Search.data）——隐藏文章也加入，仅能通过查找按钮找到
+              let searchSynced = false;
               try {
-                const { content, sha } = await getFile('library/library.html');
-                const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, title);
+                const { content, sha } = await getFile('js/library-dynamic.js');
+                const updated = insertSearchEntry(content, {
+                  title,
+                  keywords: buildSearchKeywords(form),
+                  urlPath: `${category.dir}/${titleEn}.html`,
+                });
                 if (updated !== content) {
-                  await putFile('library/library.html', updated, {
+                  await putFile('js/library-dynamic.js', updated, {
                     sha,
-                    message: `文章列表同步：${title}（移动端 App）`,
+                    message: `站内搜索数据同步：${title}（移动端 App）`,
                   });
-                  librarySynced = true;
+                  searchSynced = true;
                 }
               } catch {
-                // library.html 同步失败不阻塞上传结果，仅提示
+                // 搜索数据同步失败不阻塞
               }
 
-              // 同步英文版 library.html（用英文标题）
+              // 非隐藏文章：同步 library.html（中文/英文）文章列表
+              let librarySynced = false;
               let enLibrarySynced = false;
-              try {
-                const { content, sha } = await getFile('en/library/library.html');
-                const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, titleEn, true);
-                if (updated !== content) {
-                  await putFile('en/library/library.html', updated, {
-                    sha,
-                    message: `Article list sync: ${titleEn} (mobile app)`,
-                  });
-                  enLibrarySynced = true;
+              if (!form.hidden) {
+                try {
+                  const { content, sha } = await getFile('library/library.html');
+                  const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, title);
+                  if (updated !== content) {
+                    await putFile('library/library.html', updated, {
+                      sha,
+                      message: `文章列表同步：${title}（移动端 App）`,
+                    });
+                    librarySynced = true;
+                  }
+                } catch {
+                  // library.html 同步失败不阻塞上传结果，仅提示
                 }
-              } catch {
-                // 英文版同步失败不阻塞
+
+                // 同步英文版 library.html（用英文标题）
+                try {
+                  const { content, sha } = await getFile('en/library/library.html');
+                  const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, titleEn, true);
+                  if (updated !== content) {
+                    await putFile('en/library/library.html', updated, {
+                      sha,
+                      message: `Article list sync: ${titleEn} (mobile app)`,
+                    });
+                    enLibrarySynced = true;
+                  }
+                } catch {
+                  // 英文版同步失败不阻塞
+                }
               }
 
               setUploadStatus('done', undefined, filePath);
               setUploading(false);
               Alert.alert(
                 '上传成功',
-                `文件：library/${filePath}\n\nlibrary.html 文章列表${librarySynced ? '已同步' : '同步失败（可手动添加）'}；英文版${enLibrarySynced ? '已同步' : '同步失败（可手动添加）'}。\n\n约 1-2 分钟后可在网站查看。`,
+                form.hidden
+                  ? `文件：library/${filePath}\n\n隐藏文章：未同步公开列表。站内搜索数据${searchSynced ? '已加入' : '同步失败（可手动添加）'}。\n\n约 1-2 分钟后可在网站查看。`
+                  : `文件：library/${filePath}\n\nlibrary.html 文章列表${librarySynced ? '已同步' : '同步失败（可手动添加）'}；英文版${enLibrarySynced ? '已同步' : '同步失败（可手动添加）'}；站内搜索${searchSynced ? '已同步' : '同步失败（可手动添加）'}。\n\n约 1-2 分钟后可在网站查看。`,
                 [
                   {
                     text: '完成',

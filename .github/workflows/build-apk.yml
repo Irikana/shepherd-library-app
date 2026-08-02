@@ -53,15 +53,15 @@ jobs:
         id: version
         run: echo "ver=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.ver }}
-          name: SlyWrite ${{ steps.version.outputs.ver }}
-          body: |
-            牧羊人图书馆写作管理 App 发布。
-
-            - 安装包：app-release.apk（下方 Assets）
-            - 更新说明见 changelog/CHANGELOG-${{ steps.version.outputs.ver }}.md
-          files: android/app/build/outputs/apk/release/app-release.apk
-          fail_on_unmatched_files: true
+      - name: Create GitHub Release (skip if tag exists)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/${{ steps.version.outputs.ver }}" >/dev/null 2>&1; then
+            echo "tag ${{ steps.version.outputs.ver }} 已存在，跳过 Release 创建"
+          else
+            gh release create "${{ steps.version.outputs.ver }}" \
+              android/app/build/outputs/apk/release/app-release.apk \
+              --title "SlyWrite ${{ steps.version.outputs.ver }}" \
+              --notes "牧羊人图书馆写作管理 App 发布。更新说明见 changelog/CHANGELOG-${{ steps.version.outputs.ver }}.md"
+          fi

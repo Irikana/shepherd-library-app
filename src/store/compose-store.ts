@@ -19,6 +19,7 @@ export const defaultForm: ArticleFormData = {
   footerNote: '',
   footnotes: [],
   includeMathJax: false,
+  hidden: false,
 };
 
 interface ComposeState {

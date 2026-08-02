@@ -20,7 +20,7 @@ import { generateArticleHtml } from '../../src/templates/article';
 import { validateArticleHtml } from '../../src/templates/validators';
 import { insertTextCard, replacePosterAndDemote } from '../../src/templates/news-card';
 import { insertNewsListItem } from '../../src/templates/news-list-item';
-import { insertIntoLibraryHtml, ARTICLE_CATEGORIES } from '../../src/lib/article-sync';
+import { insertIntoLibraryHtml, ARTICLE_CATEGORIES, insertSearchEntry, buildSearchKeywords } from '../../src/lib/article-sync';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
 
 type NewsKind = 'text' | 'poster';
@@ -184,8 +184,28 @@ export default function NewsPublishScreen() {
               await putFile(articlePath, html, { message: `发布新闻：${title}（移动端 App）` });
               steps.push(`文章已上传：${articlePath}`);
 
-              // 主页新闻区
+              // 站内搜索数据同步（隐藏新闻也加入，仅能通过查找按钮找到）
               try {
+                const { content: jsContent, sha: jsSha } = await getFile('js/library-dynamic.js');
+                const jsUpdated = insertSearchEntry(jsContent, {
+                  title,
+                  keywords: buildSearchKeywords(form),
+                  urlPath: `library/paper/${titleEn}.html`,
+                });
+                if (jsUpdated !== jsContent) {
+                  await putFile('js/library-dynamic.js', jsUpdated, { sha: jsSha, message: `站内搜索数据同步：${title}（移动端 App）` });
+                  steps.push('站内搜索数据已同步');
+                }
+              } catch {
+                steps.push('站内搜索数据同步失败（可手动添加）');
+              }
+
+              // 隐藏新闻：跳过所有公开列表同步
+              if (form.hidden) {
+                steps.push('（隐藏新闻：未同步新闻区与文章列表）');
+              } else {
+                // 主页新闻区
+                try {
                 const { content: indexHtml, sha } = await getFile('index.html');
                 const card = {
                   title,
@@ -280,6 +300,7 @@ export default function NewsPublishScreen() {
               } catch {
                 steps.push('en/library/library.html 同步失败（可手动添加）');
               }
+              } // 非隐藏新闻的列表同步结束
 
               setPublishing(false);
               const { draftId: did } = useComposeStore.getState();
