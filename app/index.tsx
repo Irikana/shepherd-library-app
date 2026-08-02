@@ -7,7 +7,7 @@ import Constants from 'expo-constants';
 import { useAuthStore } from '../src/store/auth-store';
 import { rateLimit } from '../src/lib/rate-limit';
 import { COLORS, SPACING } from '../src/theme';
-import LogoImage from '../../shephrdsLibraryWrite.png';
+import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
 

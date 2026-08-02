@@ -4,7 +4,7 @@ import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInp
 import { useAuthStore } from '../src/store/auth-store';
 import { COLORS, SPACING } from '../src/theme';
 import { REPO_CONFIG } from '../src/lib/config';
-import LogoImage from '../../shephrdsLibraryWrite.png';
+import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
 
 export default function LoginScreen() {
   const { loginWithToken, loading, error, clearError } = useAuthStore();
