@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -13,11 +14,13 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { MetaForm } from '../../src/components/MetaForm';
 import { MarkdownEditor } from '../../src/components/MarkdownEditor';
+import { HtmlPreview } from '../../src/components/HtmlPreview';
 import { useComposeStore } from '../../src/store/compose-store';
 import { useDraftsStore } from '../../src/store/drafts-store';
 import { getFile, putFile } from '../../src/lib/github-client';
 import { generateArticleHtml } from '../../src/templates/article';
 import { validateArticleHtml } from '../../src/templates/validators';
+import { buildPreviewHtml, getSiteCss } from '../../src/lib/site-style';
 import { insertTextCard, replacePosterAndDemote } from '../../src/templates/news-card';
 import { insertNewsListItem } from '../../src/templates/news-list-item';
 import { insertIntoLibraryHtml, ARTICLE_CATEGORIES, insertSearchEntry, buildSearchKeywords } from '../../src/lib/article-sync';
@@ -75,6 +78,9 @@ export default function NewsPublishScreen() {
   const { form, setField, draftId, startDraft } = useComposeStore();
   const [tab, setTab] = useState<Tab>('meta');
   const [publishing, setPublishing] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [kind, setKind] = useState<NewsKind>('text');
   const [posterUri, setPosterUri] = useState<string | null>(null);
   const [posterBase64, setPosterBase64] = useState<string | null>(null);
@@ -119,6 +125,29 @@ export default function NewsPublishScreen() {
       setPosterBase64(asset.base64);
     } catch (err) {
       Alert.alert('选图失败', `无法读取所选图片，请重试。\n\n${(err as Error).message}`);
+    }
+  };
+
+  /** 生成并预览新闻正文（与文章一致的预览能力） */
+  const handlePreview = async () => {
+    if (!form.title.trim() || !form.titleEn.trim()) {
+      Alert.alert('请先填写标题', '中文标题与英文标题都需要填写。');
+      return;
+    }
+    if (!form.bodyMarkdown.trim()) {
+      Alert.alert('正文不能为空');
+      return;
+    }
+    setPreparing(true);
+    try {
+      const html = generateArticleHtml(form);
+      const css = await getSiteCss();
+      setPreviewHtml(buildPreviewHtml(html, css));
+      setPreviewVisible(true);
+    } catch {
+      Alert.alert('预览失败', '无法生成本文预览，请重试。');
+    } finally {
+      setPreparing(false);
     }
   };
 
@@ -350,12 +379,40 @@ export default function NewsPublishScreen() {
         )}
       </View>
 
-      {/* 底部发布按钮 */}
+      {/* 底部按钮 */}
       <View style={s.footer}>
+        <Pressable
+          style={[s.previewBtn, (preparing || publishing) && s.btnDisabled]}
+          onPress={handlePreview}
+          disabled={preparing || publishing}
+        >
+          <Text style={s.previewBtnText}>{preparing ? '生成中…' : '生成预览'}</Text>
+        </Pressable>
         <Pressable style={[s.publishBtn, publishing && s.btnDisabled]} onPress={handlePublish} disabled={publishing}>
           <Text style={s.publishBtnText}>{publishing ? '发布中…' : '发布新闻'}</Text>
         </Pressable>
       </View>
+
+      {/* 正文预览（与文章一致的网站样式渲染） */}
+      <Modal visible={previewVisible} animationType="slide" onRequestClose={() => setPreviewVisible(false)}>
+        <View style={s.previewModal}>
+          <View style={s.previewHeader}>
+            <Text style={s.previewTitle}>正文预览</Text>
+            <Pressable style={s.previewClose} onPress={() => setPreviewVisible(false)}>
+              <Text style={s.previewCloseText}>关闭</Text>
+            </Pressable>
+          </View>
+          {previewHtml ? (
+            <View style={{ flex: 1 }}>
+              <HtmlPreview html={previewHtml} />
+            </View>
+          ) : (
+            <View style={s.previewEmpty}>
+              <Text style={s.previewEmptyText}>无预览内容</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -405,16 +462,48 @@ const createStyles = (COLORS: Palette) =>
     },
     pickBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '600' },
     footer: {
+      flexDirection: 'row',
+      gap: SPACING.sm,
       borderTopWidth: 1,
       borderColor: COLORS.border,
       padding: SPACING.md,
       backgroundColor: COLORS.bg,
     },
+    previewBtn: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      padding: SPACING.md,
+      alignItems: 'center',
+      backgroundColor: COLORS.bgSubtle,
+    },
+    previewBtnText: { color: COLORS.accent, fontSize: 15, fontWeight: '600' },
     publishBtn: {
+      flex: 2,
       backgroundColor: COLORS.accent,
       padding: SPACING.md,
       alignItems: 'center',
     },
     publishBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
     btnDisabled: { opacity: 0.5 },
+    previewModal: { flex: 1, backgroundColor: COLORS.bg },
+    previewHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottomWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.md,
+      backgroundColor: COLORS.bgSubtle,
+    },
+    previewTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+    previewClose: {
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      paddingVertical: 6,
+      paddingHorizontal: SPACING.lg,
+    },
+    previewCloseText: { fontSize: 14, color: COLORS.accent, fontWeight: '600' },
+    previewEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    previewEmptyText: { fontSize: 14, color: COLORS.textLight },
   });

@@ -5,6 +5,7 @@ import { SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
 import { DatePickerModal } from './DatePickerModal';
 import { TimePickerModal } from './TimePickerModal';
+import { ARTICLE_CATEGORIES } from '../lib/article-sync';
 import type { ArticleTagName, ArticleType } from '../types';
 
 /** 文章性质（区别于文章分类：library/ 下每个子目录是一个分类） */
@@ -93,6 +94,24 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
         ))}
       </View>
       <Text style={s.hint}>文章性质指创作方式（录音/手写/信息/实验性），与文章分类（library/ 下目录）不同</Text>
+
+      {/* 文章分类 */}
+      <Text style={s.label}>文章分类 *</Text>
+      <View style={s.chipRow}>
+        {ARTICLE_CATEGORIES.map((c) => {
+          const active = form.category === c.key;
+          return (
+            <Pressable
+              key={c.key}
+              style={[s.chip, active && s.chipActive]}
+              onPress={() => setField('category', c.key)}
+            >
+              <Text style={[s.chipText, active && s.chipTextActive]}>{c.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={s.hint}>上传到 library/ 下对应分类目录（普通/作品/杂物/测试文章）</Text>
 
       {/* 录音时长（条件） */}
       {form.articleType === '录音文章' && (

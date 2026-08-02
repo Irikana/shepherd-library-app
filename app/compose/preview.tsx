@@ -11,10 +11,8 @@ import { validateArticleHtml } from '../../src/templates/validators';
 import {
   ARTICLE_CATEGORIES,
   buildSearchKeywords,
-  defaultCategoryForType,
   insertIntoLibraryHtml,
   insertSearchEntry,
-  type ArticleCategory,
 } from '../../src/lib/article-sync';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
 
@@ -23,10 +21,11 @@ export default function PreviewScreen() {
   const { colors } = useTheme();
   const { form, generatedHtml, setUploadStatus, reset } = useComposeStore();
   const [uploading, setUploading] = useState(false);
-  const [category, setCategory] = useState<ArticleCategory>(() =>
-    defaultCategoryForType(useComposeStore.getState().form.articleType),
-  );
   const s = createStyles(colors);
+
+  // 文章分类在元数据表单中选择（form.category）
+  const category =
+    ARTICLE_CATEGORIES.find((c) => c.key === form.category) ?? ARTICLE_CATEGORIES[0];
 
   const validation = generatedHtml ? validateArticleHtml(generatedHtml) : null;
 
@@ -177,25 +176,10 @@ export default function PreviewScreen() {
         </View>
       )}
 
-      {/* 分类选择 */}
+      {/* 分类提示（分类在元数据表单中选择） */}
       <View style={s.categoryBox}>
-        <Text style={s.categoryLabel}>文章分类</Text>
-        <View style={s.chipRow}>
-          {ARTICLE_CATEGORIES.map((c) => {
-            const active = category.key === c.key;
-            return (
-              <Pressable
-                key={c.key}
-                style={[s.chip, active && s.chipActive]}
-                onPress={() => setCategory(c)}
-              >
-                <Text style={[s.chipText, active && s.chipTextActive]}>{c.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
         <Text style={s.categoryHint}>
-          将上传至 library/{category.dir}/{form.titleEn?.trim() || '文件名'}.html，并同步到 library.html 的「{category.label}」列表
+          文章分类：{category.label}（在元数据表单中修改）→ 上传至 library/{category.dir}/
         </Text>
       </View>
 
@@ -237,19 +221,7 @@ const createStyles = (COLORS: Palette) =>
       borderColor: COLORS.border,
       backgroundColor: COLORS.bgSubtle,
     },
-    categoryLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
-    chip: {
-      borderWidth: 1,
-      borderColor: COLORS.border,
-      paddingVertical: 4,
-      paddingHorizontal: 10,
-      backgroundColor: COLORS.bg,
-    },
-    chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
-    chipText: { fontSize: 12, color: COLORS.textSecondary },
-    chipTextActive: { color: '#fff', fontWeight: '600' },
-    categoryHint: { fontSize: 11, color: COLORS.textLight, marginTop: 6, lineHeight: 16 },
+    categoryHint: { fontSize: 11, color: COLORS.textLight, lineHeight: 16 },
     preview: { flex: 1 },
     footer: {
       flexDirection: 'row',

@@ -20,6 +20,8 @@ export interface ArticleFormData {
   /** 脚注列表，正文中 [n] 上标引用对应第 n 条 */
   footnotes: string[];
   includeMathJax: boolean;
+  /** 文章分类（library/ 下目录的 key，见 src/lib/article-sync.ts 的 ARTICLE_CATEGORIES） */
+  category: string;
   /** 隐藏文章：不同步 library.html 与新闻等公开列表，仅加入站内搜索数据（只能通过查找按钮找到） */
   hidden: boolean;
 }

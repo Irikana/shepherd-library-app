@@ -19,6 +19,7 @@ export const defaultForm: ArticleFormData = {
   footerNote: '',
   footnotes: [],
   includeMathJax: false,
+  category: 'normal',
   hidden: false,
 };
 

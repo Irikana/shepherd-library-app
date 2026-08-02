@@ -6,11 +6,13 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../src/store/auth-store';
 import { useSettingsStore } from '../src/store/settings-store';
+import { useDraftsStore } from '../src/store/drafts-store';
 import { useTheme, type Palette } from '../src/theme';
 
 export default function RootLayout() {
   const { isAuthenticated, init } = useAuthStore();
   const settingsInit = useSettingsStore((s) => s.init);
+  const draftsInit = useDraftsStore((s) => s.init);
   const segments = useSegments();
   const router = useRouter();
   const { isDark, colors } = useTheme();
@@ -19,7 +21,8 @@ export default function RootLayout() {
   useEffect(() => {
     init();
     settingsInit();
-  }, [init, settingsInit]);
+    draftsInit();
+  }, [init, settingsInit, draftsInit]);
 
   // Auth Gate: 在 useEffect 中导航，避免渲染期 Redirect 导致
   // "Attempted to navigate before mounting Root Layout" 错误
