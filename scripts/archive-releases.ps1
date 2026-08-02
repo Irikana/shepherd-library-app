@@ -30,7 +30,7 @@ foreach ($v in $versions) {
 
   # 下载 artifact zip
   $zip = Join-Path $tmp "$($v.tag).zip"
-  & curl.exe -sL -H "Authorization: Bearer $token" -o $zip "$api/actions/artifacts/$($art.id)/zip"
+  & curl.exe -sL -x http://127.0.0.1:7897 -H "Authorization: Bearer $token" -o $zip "$api/actions/artifacts/$($art.id)/zip"
   if (-not (Test-Path $zip)) { Write-Output "跳过 $($v.tag)：下载失败"; continue }
 
   # 解压 APK
@@ -45,7 +45,7 @@ foreach ($v in $versions) {
 
   # 上传 APK asset
   $assetName = 'app-release.apk'
-  & curl.exe -sL -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/vnd.android.package-archive" --data-binary "@$($apk.FullName)" "$api/releases/$($rel.id)/assets?name=$assetName" | Out-Null
+  & curl.exe -sL -x http://127.0.0.1:7897 -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/vnd.android.package-archive" --data-binary "@$($apk.FullName)" "$api/releases/$($rel.id)/assets?name=$assetName" | Out-Null
   Write-Output "已归档 $($v.tag) -> $($rel.html_url) ($([Math]::Round($apk.Length/1MB,1)) MB)"
 }
 
