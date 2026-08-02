@@ -1,11 +1,15 @@
 // 首页：功能入口卡片 + 版本号 + 速率限制
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useAuthStore } from '../src/store/auth-store';
 import { rateLimit } from '../src/lib/rate-limit';
 import { COLORS, SPACING } from '../src/theme';
+import LogoImage from '../../shephrdsLibraryWrite.png';
+
+const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
 
 interface FeatureItem {
   title: string;
@@ -99,6 +103,19 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
+      {/* 品牌区 */}
+      <View style={s.brand}>
+        <Image source={LogoImage} style={s.logo} resizeMode="contain" />
+        <View style={{ flex: 1 }}>
+          <Text style={s.brandName}>SlyWrite</Text>
+          <Text style={s.brandSub}>牧羊人图书馆 · 写作管理</Text>
+        </View>
+        <View style={s.appVersionBox}>
+          <Text style={s.appVersionLabel}>软件版本</Text>
+          <Text style={s.appVersionValue}>v{APP_VERSION}</Text>
+        </View>
+      </View>
+
       {/* 状态条 */}
       <View style={s.statusBar}>
         <View style={{ flex: 1 }}>
@@ -164,6 +181,21 @@ export default function HomeScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bgSubtle },
   content: { padding: SPACING.md, paddingBottom: SPACING.xl },
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  logo: { width: 56, height: 56, marginRight: SPACING.sm },
+  brandName: { fontSize: 22, fontWeight: '700', color: COLORS.accent },
+  brandSub: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+  appVersionBox: { alignItems: 'flex-end', marginLeft: SPACING.sm },
+  appVersionLabel: { fontSize: 11, color: COLORS.textLight },
+  appVersionValue: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600', marginTop: 2 },
   statusBar: {
     flexDirection: 'row',
     alignItems: 'center',

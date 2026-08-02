@@ -16,6 +16,7 @@ export const defaultForm: ArticleFormData = {
   recordingDuration: '',
   bodyMarkdown: '',
   footerNote: '',
+  footnotes: [],
   includeMathJax: false,
 };
 

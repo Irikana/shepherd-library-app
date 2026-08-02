@@ -1,9 +1,10 @@
 // Token 登录页
 import React, { useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuthStore } from '../src/store/auth-store';
 import { COLORS, SPACING } from '../src/theme';
 import { REPO_CONFIG } from '../src/lib/config';
+import LogoImage from '../../shephrdsLibraryWrite.png';
 
 export default function LoginScreen() {
   const { loginWithToken, loading, error, clearError } = useAuthStore();
@@ -29,8 +30,9 @@ export default function LoginScreen() {
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <View style={s.header}>
-        <Text style={s.title}>牧羊人图书馆</Text>
-        <Text style={s.subtitle}>移动端内容管理</Text>
+        <Image source={LogoImage} style={s.logo} resizeMode="contain" />
+        <Text style={s.title}>SlyWrite</Text>
+        <Text style={s.subtitle}>牧羊人图书馆 · 写作管理</Text>
       </View>
 
       <View style={s.infoBox}>
@@ -88,7 +90,8 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bgSubtle },
   content: { padding: SPACING.lg, paddingBottom: SPACING.xl },
   header: { alignItems: 'center', marginBottom: SPACING.xl, marginTop: SPACING.xl },
-  title: { fontSize: 24, fontWeight: '700', color: COLORS.accent },
+  logo: { width: 96, height: 96, marginBottom: SPACING.sm },
+  title: { fontSize: 26, fontWeight: '700', color: COLORS.accent },
   subtitle: { fontSize: 14, color: COLORS.textLight, marginTop: 4 },
   infoBox: {
     backgroundColor: '#f0f7fd',

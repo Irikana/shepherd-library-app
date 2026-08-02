@@ -6,14 +6,16 @@ import { COLORS } from '../theme';
 
 interface HtmlPreviewProps {
   html: string;
+  /** 可选：HTML 中相对路径资源（图片/CSS/JS）的解析基地址 */
+  baseUrl?: string;
 }
 
-export function HtmlPreview({ html }: HtmlPreviewProps) {
+export function HtmlPreview({ html, baseUrl }: HtmlPreviewProps) {
   return (
     <View style={s.container}>
       <WebView
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, ...(baseUrl ? { baseUrl } : {}) }}
         style={s.webview}
         renderLoading={() => (
           <View style={s.loading}>

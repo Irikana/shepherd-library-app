@@ -1,6 +1,6 @@
-# 牧羊人图书馆 · 移动端内容管理 App
+# SlyWrite · 牧羊人图书馆写作管理 App
 
-在 Android 手机上完成「撰写文章 → 自动生成合规 HTML → 一键提交到 GitHub → 触发 Jekyll 部署」的全链路，无需开电脑。
+SlyWrite（Sly 取自 Shepherd's Library 的 S、L、Y，Write 为写作创作之意）在 Android 手机上完成「撰写文章 → 自动生成合规 HTML → 一键提交到 GitHub → 触发 Jekyll 部署」的全链路，无需开电脑。
 
 ## 架构
 
@@ -20,7 +20,7 @@ App 的模板生成器以网站规范为权威源。开发 App 前须先确保 `
 |------|------|------|
 | 认证 | ✅ MVP | Token 输入 + 验证 + Keystore + Auth Gate |
 | GitHub API 客户端 | ✅ MVP | Contents API 读写 + Git Data API 原子提交 + 速率限制 + 中文路径编码 |
-| 撰写文章 | ✅ MVP | 表单 + Markdown 编辑器 + 实时预览 + HTML 模板生成 + 上传前校验 |
+| 撰写文章 | ✅ MVP | 元数据表单（日历选日期/小时钟选时长/脚注）+ Markdown 编辑器（网站视觉组件/数学公式插入）+ 网站样式预览 + HTML 模板生成 + 上传前校验 |
 | 版本号只读 | ✅ MVP | 从 `library-dynamic.js` 提取 alpha 版本 |
 | 新闻发布 | 🔜 Phase 2 | 5 文件原子提交 + 6 条上限 + 海报替换 |
 | 内容编辑 | 🔜 Phase 2 | 文件树 + 单文件读写 + 冲突处理 |
@@ -45,6 +45,7 @@ shepherd-library-app/
 │   │   ├── git-data.ts        # 原子多文件提交
 │   │   ├── auth.ts            # Token 存取（Keystore）
 │   │   ├── version.ts         # 版本号提取
+│   │   ├── site-style.ts      # 预览时读取网站 style.css 内联渲染
 │   │   ├── path-codec.ts      # 中文路径编码
 │   │   ├── base64.ts          # UTF-8 安全 Base64
 │   │   └── rate-limit.ts      # 速率限制追踪
@@ -55,7 +56,9 @@ shepherd-library-app/
 │   │   └── validators.ts      # HTML 合规性校验
 │   ├── components/            # UI 组件
 │   │   ├── MetaForm.tsx       # 元数据表单
-│   │   ├── MarkdownEditor.tsx # Markdown 编辑器
+│   │   ├── MarkdownEditor.tsx # Markdown 编辑器（插入区 + 数学符号面板）
+│   │   ├── DatePickerModal.tsx# 创建日期月历选择器
+│   │   ├── TimePickerModal.tsx# 录音时长小时钟
 │   │   └── HtmlPreview.tsx    # WebView 预览
 │   ├── store/                 # Zustand 状态
 │   │   ├── auth-store.ts
@@ -64,6 +67,7 @@ shepherd-library-app/
 │   └── types.ts               # 共享类型
 ├── app.json                   # Expo 配置
 ├── eas.json                   # EAS Build 配置（出 APK）
+├── changelog/                 # 版本更新日志
 └── package.json
 ```
 

@@ -13,6 +13,8 @@ export interface ArticleFormData {
   recordingDuration?: string; // 仅录音文章
   bodyMarkdown: string;
   footerNote?: string;
+  /** 脚注列表，正文中 [n] 上标引用对应第 n 条 */
+  footnotes: string[];
   includeMathJax: boolean;
 }
 

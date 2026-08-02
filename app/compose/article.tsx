@@ -7,6 +7,7 @@ import { MarkdownEditor } from '../../src/components/MarkdownEditor';
 import { useComposeStore } from '../../src/store/compose-store';
 import { generateArticleHtml } from '../../src/templates/article';
 import { validateArticleHtml } from '../../src/templates/validators';
+import { buildPreviewHtml, getSiteCss } from '../../src/lib/site-style';
 import { COLORS, SPACING } from '../../src/theme';
 
 type Tab = 'meta' | 'body';
@@ -14,9 +15,10 @@ type Tab = 'meta' | 'body';
 export default function ComposeArticleScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('meta');
+  const [preparing, setPreparing] = useState(false);
   const { form, setGeneratedHtml } = useComposeStore();
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
     if (!form.title.trim()) {
       Alert.alert('标题不能为空');
       return;
@@ -38,7 +40,18 @@ export default function ComposeArticleScreen() {
       );
       return;
     }
-    goPreview(html);
+    setPreparing(true);
+    try {
+      // 读取网站 style.css 内联到预览，真实渲染出网站视觉组件
+      const css = await getSiteCss();
+      const previewHtml = buildPreviewHtml(html, css);
+      goPreview(previewHtml);
+    } catch {
+      // 样式加载失败时回退为无样式预览，不阻塞
+      goPreview(html);
+    } finally {
+      setPreparing(false);
+    }
   };
 
   const goPreview = (html: string) => {
@@ -71,8 +84,8 @@ export default function ComposeArticleScreen() {
 
       {/* 底部预览按钮 */}
       <View style={s.footer}>
-        <Pressable style={s.previewBtn} onPress={handlePreview}>
-          <Text style={s.previewBtnText}>生成预览</Text>
+        <Pressable style={[s.previewBtn, preparing && s.btnDisabled]} onPress={handlePreview} disabled={preparing}>
+          <Text style={s.previewBtnText}>{preparing ? '加载网站样式…' : '生成预览'}</Text>
         </Pressable>
       </View>
     </View>
@@ -99,4 +112,5 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   previewBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  btnDisabled: { opacity: 0.5 },
 });

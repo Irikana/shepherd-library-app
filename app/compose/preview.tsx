@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { HtmlPreview } from '../../src/components/HtmlPreview';
 import { useComposeStore } from '../../src/store/compose-store';
 import { putFile } from '../../src/lib/github-client';
+import { PREVIEW_BASE_URL } from '../../src/lib/site-style';
 import { validateArticleHtml } from '../../src/templates/validators';
 import { COLORS, SPACING } from '../../src/theme';
 
@@ -23,6 +24,11 @@ export default function PreviewScreen() {
     const title = form.title.trim();
     if (!title) {
       Alert.alert('标题不能为空');
+      return;
+    }
+    // 标题同时是文件名：拒绝路径分隔符与危险字符，防止写入仓库任意路径
+    if (/[\\/\u0000-\u001f<>:"|?*]|\.\./.test(title)) {
+      Alert.alert('标题不合法', '标题将作为文件名，不能包含 / \\ : * ? " < > | 等字符或 ..');
       return;
     }
 
@@ -95,7 +101,7 @@ export default function PreviewScreen() {
       )}
 
       <View style={s.preview}>
-        <HtmlPreview html={generatedHtml} />
+        <HtmlPreview html={generatedHtml} baseUrl={PREVIEW_BASE_URL} />
       </View>
 
       {/* 底部操作 */}

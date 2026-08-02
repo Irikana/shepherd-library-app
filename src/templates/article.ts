@@ -10,6 +10,15 @@ export function formatDateCN(dateStr: string): string {
   return `${m[1]}年${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日`;
 }
 
+/** HTML 转义（脚注内容） */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /** 渲染标签 spans */
 function renderTags(tags: ArticleTagName[]): string {
   if (!tags.length) return '<span class="article-tag">无</span>';
@@ -23,8 +32,11 @@ function renderTags(tags: ArticleTagName[]): string {
 }
 
 /** 文章页内联脚本块（各页相同，仅 PAGE_DISPLAY_NAME 不同） */
-const ARTICLE_SCRIPT = (displayName: string) => `<script>
-const PAGE_DISPLAY_NAME = '${displayName.replace(/'/g, "\\'")}';
+const ARTICLE_SCRIPT = (displayName: string) => {
+  // JS 字符串上下文转义：防 </script> 提前终止、防单引号破坏字符串
+  const safeName = displayName.replace(/</g, '\\u003c').replace(/'/g, "\\'");
+  return `<script>
+const PAGE_DISPLAY_NAME = '${safeName}';
 
 function scrollToTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -112,6 +124,7 @@ window.addEventListener('DOMContentLoaded', function() {
   if (navHubBtn) { navHubBtn.addEventListener('click', openNavigator); }
 });
 </script>`;
+};
 
 const MATHJAX_HEAD = `<script>
 MathJax = {
@@ -128,13 +141,34 @@ MathJax = {
  */
 export function generateArticleHtml(data: ArticleFormData): string {
   const dateCN = formatDateCN(data.createDate);
-  const bodyHtml = marked.parse(data.bodyMarkdown || '', { async: false }) as string;
+  const titleSafe = escapeHtml(data.title);
+
+  // 脚注引用：将正文中的 [^n] 替换为上标可点击引用（链接到页脚解释处）
+  // 1) 先保护代码块/行内代码，避免其中的字面 [n] 被误替换
+  // 2) 编号超出脚注列表范围的引用保留原文（避免悬空锚点）
+  const codeSpans: string[] = [];
+  const protectedMd = (data.bodyMarkdown || '').replace(
+    /(```[\s\S]*?```|`[^`\n]*`)/g,
+    (m) => {
+      codeSpans.push(m);
+      return `\u0000${codeSpans.length - 1}\u0000`;
+    },
+  );
+  const footnoteCount = data.footnotes?.length ?? 0;
+  const bodyWithFootnotes = protectedMd
+    .replace(/\[\^(\d+)\]/g, (match, n: string) => {
+      const idx = parseInt(n, 10);
+      if (idx < 1 || idx > footnoteCount) return match;
+      return `<sup class="article-footnote-ref" id="article-fnref-${n}"><a href="#article-fn-${n}">[${n}]</a></sup>`;
+    })
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => codeSpans[parseInt(i, 10)]);
+  const bodyHtml = marked.parse(bodyWithFootnotes, { async: false }) as string;
 
   // 元数据项
   const metaItems: string[] = [
     `      <div class="article-meta-item">
           <span class="article-meta-label">作者：</span>
-          <span class="article-meta-value">${data.author}</span>
+          <span class="article-meta-value">${escapeHtml(data.author)}</span>
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">创建日期：</span>
@@ -142,7 +176,7 @@ export function generateArticleHtml(data: ArticleFormData): string {
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">文章类型：</span>
-          <span class="article-meta-value"><span class="article-type-badge">${data.articleType}</span></span>
+          <span class="article-meta-value"><span class="article-type-badge">${escapeHtml(data.articleType)}</span></span>
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">标签：</span>
@@ -156,18 +190,48 @@ export function generateArticleHtml(data: ArticleFormData): string {
   if (data.articleType === '录音文章' && data.recordingDuration) {
     metaItems.push(`      <div class="article-meta-item">
           <span class="article-meta-label">录音时长：</span>
-          <span class="article-meta-value">${data.recordingDuration}</span>
+          <span class="article-meta-value">${escapeHtml(data.recordingDuration)}</span>
         </div>`);
   }
 
-  // 可选 footer-meta
-  const footerMeta = data.footerNote
-    ? `\n\n      <div class="article-footer-meta">
-        <div class="article-footer-meta-item">
+  // 脚注列表（与补充说明同级，渲染在页脚）
+  const footnoteItems = (data.footnotes || [])
+    .map((text, i) => {
+      const n = i + 1;
+      const content = text.trim();
+      if (!content) return '';
+      return `<span class="article-footnote-item" id="article-fn-${n}">[${n}] ${escapeHtml(content)} <a href="#article-fnref-${n}" class="article-footnote-back" title="返回正文">↩</a></span>`;
+    })
+    .filter(Boolean)
+    .join('\n          ');
+
+  // 可选 footer-meta（补充说明 + 脚注同级）
+  const footerParts: string[] = [];
+  if (data.footerNote) {
+    footerParts.push(`        <div class="article-footer-meta-item">
           <span class="article-footer-label">补充说明：</span>
-          <span class="article-footer-value">${data.footerNote}</span>
-        </div>
-      </div>`
+          <span class="article-footer-value">${escapeHtml(data.footerNote)}</span>
+        </div>`);
+  }
+  if (footnoteItems) {
+    footerParts.push(`        <div class="article-footer-meta-item">
+          <span class="article-footer-label">脚注：</span>
+          <span class="article-footer-value article-footnote-list">${footnoteItems}</span>
+        </div>`);
+  }
+  const footerMeta = footerParts.length
+    ? `\n\n      <div class="article-footer-meta">\n${footerParts.join('\n')}\n      </div>`
+    : '';
+
+  // 脚注相关样式（上标引用 + 页脚条目）：正文有 [n] 引用或页脚有脚注时注入
+  const hasFootnoteRefs = /\[\^\d+\]/.test(data.bodyMarkdown || '');
+  const footnoteStyle = footnoteItems || hasFootnoteRefs
+    ? `\n<style>
+.article-footnote-ref a { text-decoration: none; color: var(--color-accent); font-weight: 600; }
+.article-footnote-list { font-style: normal; }
+.article-footnote-item { display: block; margin: 3px 0; font-style: normal; line-height: 1.7; }
+.article-footnote-back { text-decoration: none; color: var(--color-accent); margin-left: 4px; font-weight: 600; }
+</style>`
     : '';
 
   return `<!doctype html>
@@ -175,10 +239,11 @@ export function generateArticleHtml(data: ArticleFormData): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>牧羊人图书馆 - ${data.title}</title>
+<title>牧羊人图书馆 - ${titleSafe}</title>
 <meta name="description" content="牧羊人图书馆 - 存放所有知识之地">
 <meta name="keywords" content="图书馆,知识,学习,牧羊人">
 <link rel="stylesheet" href="../../css/style.css">
+${footnoteStyle}
 ${data.includeMathJax ? MATHJAX_HEAD : ''}
 </head>
 <body>
@@ -190,7 +255,7 @@ ${data.includeMathJax ? MATHJAX_HEAD : ''}
       <span class="slogan-text">存放所有知识之地</span>
       <hr class="slogan-line slogan-line-right">
     </div>
-    <div class="section-padding page-title-main">${data.title}</div>
+    <div class="section-padding page-title-main">${titleSafe}</div>
   </div>
 </div>
 </header>
