@@ -25,8 +25,10 @@ export default function DraftsScreen() {
   const resume = (id: string) => {
     const draft = useDraftsStore.getState().drafts.find((d) => d.id === id);
     if (!draft) return;
-    useComposeStore.getState().loadDraft(draft.id, draft.form);
-    router.push('/compose/article');
+    // 新闻草稿恢复到新闻发布页，普通文章草稿恢复到撰写文章页
+    const kind = draft.kind === 'news' ? 'news' : 'article';
+    useComposeStore.getState().loadDraft(draft.id, draft.form, kind);
+    router.push(kind === 'news' ? '/news/publish' : '/compose/article');
   };
 
   const remove = (id: string, title: string) => {

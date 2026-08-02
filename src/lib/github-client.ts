@@ -113,7 +113,9 @@ export async function listDir(
   dir: string,
   ref: string = REPO_CONFIG.branch,
 ): Promise<RepoContentItem[]> {
-  const res = await request(`${API_BASE}/contents/${encodePath(dir)}?ref=${ref}`);
+  // 根目录用空路径，避免 contents/ 尾部斜杠导致 404
+  const encoded = dir ? encodePath(dir) : '';
+  const res = await request(`${API_BASE}/contents${encoded ? `/${encoded}` : ''}?ref=${ref}`);
   if (!res.ok) {
     const msg = await parseError(res);
     throw new GitHubError(`列出目录失败（${dir}）：${msg}`, res.status);

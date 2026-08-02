@@ -195,13 +195,40 @@ const SYMBOL_GROUPS: { title: string; items: { label: string; insert: string }[]
   },
 ];
 
-export function MarkdownEditor() {
-  const { form, setField } = useComposeStore();
+export function MarkdownEditor({
+  scrollPosition,
+  onScroll,
+}: {
+  /** 恢复滚动位置（切换标签页时传入上次位置，仅首次挂载时应用） */
+  scrollPosition?: number;
+  /** 滚动位置变化回调（用于保存浏览进度） */
+  onScroll?: (y: number) => void;
+}) {
+  const { form, setField, locked } = useComposeStore();
   const { colors } = useTheme();
   const s = createStyles(colors);
   const inputRef = React.useRef<TextInput>(null);
   const selectionRef = React.useRef({ start: 0, end: 0 });
+  const scrollRef = React.useRef<ScrollView>(null);
+  const restoredRef = React.useRef(false);
   const [symbolsVisible, setSymbolsVisible] = useState(false);
+
+  // 锁定状态下只读（防误触）
+  const lockedBody = locked.body;
+
+  // 恢复上次浏览位置（仅首次挂载时应用一次，避免与用户滚动互相覆盖）
+  const onLayout = () => {
+    if (!restoredRef.current && scrollPosition && scrollPosition > 0) {
+      restoredRef.current = true;
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: scrollPosition, animated: false });
+      });
+    }
+  };
+
+  const handleScroll = (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    onScroll?.(e.nativeEvent.contentOffset.y);
+  };
 
   /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
   const applyInsert = (text: string, cursor: number) => {
@@ -253,42 +280,64 @@ export function MarkdownEditor() {
           showsHorizontalScrollIndicator={false}
           // 键盘弹出时点击按钮一次即响应（不消费首次触摸），滑动不会误触（onPress 需抬起且未移动）
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={!lockedBody}
         >
           {ACTIONS.map((a) => (
             <Pressable
               key={a.label}
-              style={s.toolBtn}
+              style={[s.toolBtn, lockedBody && s.toolBtnDisabled]}
               onPress={() => handleInsert(a)}
+              disabled={lockedBody}
             >
               <Text style={s.toolText}>{a.label}</Text>
             </Pressable>
           ))}
-          <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPress={insertFootnote}>
+          <Pressable
+            style={[s.toolBtn, s.toolBtnFootnote, lockedBody && s.toolBtnDisabled]}
+            onPress={insertFootnote}
+            disabled={lockedBody}
+          >
             <Text style={s.toolText}>脚注</Text>
           </Pressable>
-          <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPress={() => setSymbolsVisible(true)}>
+          <Pressable
+            style={[s.toolBtn, s.toolBtnSymbols, lockedBody && s.toolBtnDisabled]}
+            onPress={() => setSymbolsVisible(true)}
+            disabled={lockedBody}
+          >
             <Text style={s.toolText}>数学符号</Text>
           </Pressable>
         </ScrollView>
       </View>
-      <TextInput
-        ref={inputRef}
-        style={s.editor}
-        value={form.bodyMarkdown}
-        onChangeText={(v) => setField('bodyMarkdown', v)}
-        onSelectionChange={(e) => {
-          selectionRef.current = {
-            start: e.nativeEvent.selection.start,
-            end: e.nativeEvent.selection.end,
-          };
-        }}
-        placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
-        placeholderTextColor={colors.textLight}
-        multiline
-        textAlignVertical="top"
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
+      {/* 正文区域：独立 ScrollView，可记录/恢复滚动位置 */}
+      <ScrollView
+        ref={scrollRef}
+        style={s.scrollArea}
+        onLayout={onLayout}
+        onScroll={handleScroll}
+        scrollEventThrottle={64}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TextInput
+          ref={inputRef}
+          style={s.editor}
+          value={form.bodyMarkdown}
+          onChangeText={(v) => setField('bodyMarkdown', v)}
+          onSelectionChange={(e) => {
+            selectionRef.current = {
+              start: e.nativeEvent.selection.start,
+              end: e.nativeEvent.selection.end,
+            };
+          }}
+          placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
+          placeholderTextColor={colors.textLight}
+          multiline
+          textAlignVertical="top"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!lockedBody}
+          showSoftInputOnFocus={!lockedBody}
+        />
+      </ScrollView>
       <Text style={s.counter}>{form.bodyMarkdown.length} 字</Text>
 
       {/* 数学符号面板 */}
@@ -352,9 +401,11 @@ const createStyles = (COLORS: Palette) =>
     },
     toolBtnFootnote: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
     toolBtnSymbols: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
+    toolBtnDisabled: { opacity: 0.35 },
     toolText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
+    scrollArea: { flex: 1 },
     editor: {
-      flex: 1,
+      flexGrow: 1,
       padding: SPACING.md,
       fontSize: FONT.size,
       fontFamily: FONT.mono,
@@ -362,6 +413,7 @@ const createStyles = (COLORS: Palette) =>
       color: COLORS.text,
       backgroundColor: COLORS.bg,
       textAlignVertical: 'top',
+      minHeight: 200,
     },
     counter: {
       textAlign: 'right',

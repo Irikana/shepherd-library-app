@@ -1,13 +1,15 @@
 // 草稿管理：撰写中的文章自动缓存到本机，退出重进后可选择恢复
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ArticleFormData } from '../types';
+import type { ArticleFormData, ComposeKind } from '../types';
 
 export interface Draft {
   id: string;
   title: string;
   updatedAt: number;
   form: ArticleFormData;
+  /** 草稿类型：普通文章 / 新闻（0.0.6 起；旧草稿无此字段，恢复时按普通文章处理） */
+  kind?: ComposeKind;
 }
 
 const DRAFTS_KEY = 'slywrite-drafts';

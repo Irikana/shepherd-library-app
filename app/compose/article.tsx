@@ -1,6 +1,7 @@
-// 撰写文章页：元数据表单 + Markdown 编辑器（分段切换）+ 草稿自动保存
+// 撰写文章页：元数据表单 + Markdown 编辑器（分段切换）+ 草稿自动保存 + 分页锁定
+// 锁定：每个标签页可单独锁定（编辑元数据时锁定正文可放心查看，反之亦然），锁定后表单只读防误触
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MetaForm } from '../../src/components/MetaForm';
 import { MarkdownEditor } from '../../src/components/MarkdownEditor';
@@ -18,7 +19,8 @@ export default function ComposeArticleScreen() {
   const { colors } = useTheme();
   const [tab, setTab] = useState<Tab>('meta');
   const [preparing, setPreparing] = useState(false);
-  const { form, setGeneratedHtml, draftId, startDraft } = useComposeStore();
+  const { form, locked, scrollPositions, setGeneratedHtml, draftId, startDraft, toggleLock, setScrollPosition } =
+    useComposeStore();
   const s = createStyles(colors);
 
   // 进入撰写页：无草稿上下文时生成新草稿 id（此后编辑会自动保存）
@@ -39,6 +41,18 @@ export default function ComposeArticleScreen() {
     }, 600);
     return () => clearTimeout(t);
   }, [form, draftId]);
+
+  /** 切换标签页：保留浏览进度，切换时收起键盘 */
+  const switchTab = (next: Tab) => {
+    if (next === tab) return;
+    Keyboard.dismiss();
+    setTab(next);
+  };
+
+  /** 切换当前标签页的锁定状态 */
+  const handleToggleLock = () => {
+    toggleLock(tab);
+  };
 
   const handlePreview = async () => {
     if (!form.title.trim()) {
@@ -85,27 +99,52 @@ export default function ComposeArticleScreen() {
     router.push('/compose/preview');
   };
 
+  const lockedText = locked.meta || locked.body ? '已锁定' : '未锁定';
+
   return (
     <View style={s.container}>
-      {/* 分段切换 */}
+      {/* 分段切换 + 锁定开关 */}
       <View style={s.tabs}>
         <Pressable
           style={[s.tab, tab === 'meta' && s.tabActive]}
-          onPress={() => setTab('meta')}
+          onPress={() => switchTab('meta')}
         >
           <Text style={[s.tabText, tab === 'meta' && s.tabTextActive]}>元数据</Text>
         </Pressable>
         <Pressable
           style={[s.tab, tab === 'body' && s.tabActive]}
-          onPress={() => setTab('body')}
+          onPress={() => switchTab('body')}
         >
           <Text style={[s.tabText, tab === 'body' && s.tabTextActive]}>正文</Text>
         </Pressable>
+        <Pressable
+          style={[s.lockBtn, locked[tab] && s.lockBtnOn]}
+          onPress={handleToggleLock}
+          accessibilityLabel={locked[tab] ? '解锁当前页' : '锁定当前页'}
+        >
+          <Text style={[s.lockText, locked[tab] && s.lockTextOn]}>
+            {locked[tab] ? '已锁定' : '锁定'}
+          </Text>
+        </Pressable>
       </View>
+      <Text style={s.lockHint}>
+        锁定后当前页只读，切换查看不会误触；{lockedText}
+      </Text>
 
-      {/* 内容 */}
+      {/* 内容：两个标签页始终保持挂载，切换保留滚动位置 */}
       <View style={s.content}>
-        {tab === 'meta' ? <MetaForm /> : <MarkdownEditor />}
+        <View style={[s.page, tab !== 'meta' && s.pageHidden]}>
+          <MetaForm
+            scrollPosition={scrollPositions.meta}
+            onScroll={(y) => setScrollPosition('meta', y)}
+          />
+        </View>
+        <View style={[s.page, tab !== 'body' && s.pageHidden]}>
+          <MarkdownEditor
+            scrollPosition={scrollPositions.body}
+            onScroll={(y) => setScrollPosition('body', y)}
+          />
+        </View>
       </View>
 
       {/* 底部预览按钮 */}
@@ -126,7 +165,29 @@ const createStyles = (COLORS: Palette) =>
     tabActive: { backgroundColor: COLORS.bg, borderBottomWidth: 2, borderBottomColor: COLORS.accent },
     tabText: { fontSize: 15, color: COLORS.textSecondary },
     tabTextActive: { color: COLORS.accent, fontWeight: '600' },
+    lockBtn: {
+      borderLeftWidth: 1,
+      borderColor: COLORS.border,
+      paddingHorizontal: SPACING.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.bgSubtle,
+    },
+    lockBtnOn: { backgroundColor: COLORS.accent },
+    lockText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
+    lockTextOn: { color: '#fff', fontWeight: '600' },
+    lockHint: {
+      fontSize: 11,
+      color: COLORS.textLight,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      backgroundColor: COLORS.bgSubtle,
+      borderBottomWidth: 1,
+      borderColor: COLORS.border,
+    },
     content: { flex: 1 },
+    page: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.bg },
+    pageHidden: { display: 'none' },
     footer: {
       borderTopWidth: 1,
       borderColor: COLORS.border,

@@ -1,5 +1,5 @@
 // 文章元数据表单
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
@@ -12,12 +12,40 @@ import type { ArticleTagName, ArticleType } from '../types';
 const ARTICLE_TYPES: ArticleType[] = ['录音文章', '手写文章', '信息文章', '实验性文章'];
 const ALL_TAGS: ArticleTagName[] = ['新闻', '小说', '包含AI', '有删减', '无'];
 
-export function MetaForm({ extra }: { extra?: React.ReactNode }) {
-  const { form, setField, toggleTag, setArticleType } = useComposeStore();
+interface MetaFormProps {
+  /** 可选：新闻发布页的附加区块 */
+  extra?: React.ReactNode;
+  /** 恢复滚动位置（切换标签页时传入上次位置，仅首次挂载时应用） */
+  scrollPosition?: number;
+  /** 滚动位置变化回调（用于保存浏览进度） */
+  onScroll?: (y: number) => void;
+}
+
+export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
+  const { form, setField, toggleTag, setArticleType, locked } = useComposeStore();
   const { colors } = useTheme();
   const s = createStyles(colors);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const restoredRef = useRef(false);
+
+  // 锁定状态下只读（防误触）
+  const lockedMeta = locked.meta;
+
+  // 恢复上次浏览位置（仅首次挂载时应用一次，避免与用户滚动互相覆盖）
+  const onLayout = () => {
+    if (!restoredRef.current && scrollPosition && scrollPosition > 0) {
+      restoredRef.current = true;
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: scrollPosition, animated: false });
+      });
+    }
+  };
+
+  const handleScroll = (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    onScroll?.(e.nativeEvent.contentOffset.y);
+  };
 
   const updateFootnote = (index: number, text: string) => {
     const next = [...form.footnotes];
@@ -32,7 +60,15 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
   };
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
+    <ScrollView
+      ref={scrollRef}
+      style={s.container}
+      contentContainerStyle={s.content}
+      onLayout={onLayout}
+      onScroll={handleScroll}
+      scrollEventThrottle={64}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* 标题（中文） */}
       <Text style={s.label}>标题 *</Text>
       <TextInput
@@ -41,6 +77,7 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
         onChangeText={(v) => setField('title', v)}
         placeholder="文章中文标题（用于页面显示）"
         placeholderTextColor={colors.textLight}
+        editable={!lockedMeta}
       />
 
       {/* 标题（英文，文件名） */}
@@ -53,6 +90,7 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
         placeholderTextColor={colors.textLight}
         autoCapitalize="none"
         autoCorrect={false}
+        editable={!lockedMeta}
       />
       <Text style={s.hint}>英文标题将作为文件名，兼容性更好；中文标题用于页面显示</Text>
 
@@ -64,6 +102,7 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
         onChangeText={(v) => setField('author', v)}
         placeholder="作者名"
         placeholderTextColor={colors.textLight}
+        editable={!lockedMeta}
       />
 
       {/* 创建日期 */}
@@ -74,7 +113,11 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
             {form.createDate || 'YYYY-MM-DD'}
           </Text>
         </View>
-        <Pressable style={s.sideBtn} onPress={() => setDatePickerVisible(true)}>
+        <Pressable
+          style={[s.sideBtn, lockedMeta && s.btnDisabled]}
+          onPress={() => setDatePickerVisible(true)}
+          disabled={lockedMeta}
+        >
           <Text style={s.sideBtnText}>日历</Text>
         </Pressable>
       </View>
@@ -86,8 +129,9 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
         {ARTICLE_TYPES.map((t) => (
           <Pressable
             key={t}
-            style={[s.chip, form.articleType === t && s.chipActive]}
+            style={[s.chip, form.articleType === t && s.chipActive, lockedMeta && s.btnDisabled]}
             onPress={() => setArticleType(t)}
+            disabled={lockedMeta}
           >
             <Text style={[s.chipText, form.articleType === t && s.chipTextActive]}>{t}</Text>
           </Pressable>
@@ -103,8 +147,9 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
           return (
             <Pressable
               key={c.key}
-              style={[s.chip, active && s.chipActive]}
+              style={[s.chip, active && s.chipActive, lockedMeta && s.btnDisabled]}
               onPress={() => setField('category', c.key)}
+              disabled={lockedMeta}
             >
               <Text style={[s.chipText, active && s.chipTextActive]}>{c.label}</Text>
             </Pressable>
@@ -124,8 +169,13 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
               onChangeText={(v) => setField('recordingDuration', v)}
               placeholder="如 12:34"
               placeholderTextColor={colors.textLight}
+              editable={!lockedMeta}
             />
-            <Pressable style={s.sideBtn} onPress={() => setTimePickerVisible(true)}>
+            <Pressable
+              style={[s.sideBtn, lockedMeta && s.btnDisabled]}
+              onPress={() => setTimePickerVisible(true)}
+              disabled={lockedMeta}
+            >
               <Text style={s.sideBtnText}>小时钟</Text>
             </Pressable>
           </View>
@@ -147,8 +197,10 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
                 active && tag === '包含AI' && s.chipAi,
                 active && tag === '有删减' && s.chipEdited,
                 active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && s.chipActive,
+                lockedMeta && s.btnDisabled,
               ]}
               onPress={() => toggleTag(tag)}
+              disabled={lockedMeta}
             >
               <Text
                 style={[
@@ -175,6 +227,7 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
         placeholder="生成文章页脚的补充说明"
         placeholderTextColor={colors.textLight}
         multiline
+        editable={!lockedMeta}
       />
 
       {/* 脚注 */}
@@ -190,15 +243,21 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
             placeholder={`脚注 ${i + 1} 的内容`}
             placeholderTextColor={colors.textLight}
             multiline
+            editable={!lockedMeta}
           />
-          <Pressable style={s.footnoteDel} onPress={() => removeFootnote(i)}>
+          <Pressable
+            style={[s.footnoteDel, lockedMeta && s.btnDisabled]}
+            onPress={() => removeFootnote(i)}
+            disabled={lockedMeta}
+          >
             <Text style={s.footnoteDelText}>删除</Text>
           </Pressable>
         </View>
       ))}
       <Pressable
-        style={s.addBtn}
+        style={[s.addBtn, lockedMeta && s.btnDisabled]}
         onPress={() => setField('footnotes', [...form.footnotes, ''])}
+        disabled={lockedMeta}
       >
         <Text style={s.addBtnText}>+ 添加脚注</Text>
       </Pressable>
@@ -213,6 +272,7 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
           value={form.includeMathJax}
           onValueChange={(v) => setField('includeMathJax', v)}
           trackColor={{ false: colors.border, true: colors.accent }}
+          disabled={lockedMeta}
         />
       </View>
 
@@ -226,6 +286,7 @@ export function MetaForm({ extra }: { extra?: React.ReactNode }) {
           value={form.hidden}
           onValueChange={(v) => setField('hidden', v)}
           trackColor={{ false: colors.border, true: colors.accent }}
+          disabled={lockedMeta}
         />
       </View>
 
@@ -334,4 +395,5 @@ const createStyles = (COLORS: Palette) =>
     },
     addBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
     switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md },
+    btnDisabled: { opacity: 0.45 },
   });

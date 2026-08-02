@@ -3,7 +3,6 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../src/store/auth-store';
 import { useSettingsStore } from '../src/store/settings-store';
 import { useDraftsStore } from '../src/store/drafts-store';
@@ -42,13 +41,14 @@ export default function RootLayout() {
   const showSplash = isAuthenticated === null;
 
   return (
-    <SafeAreaView style={s.container} edges={['top']}>
+    <View style={s.container}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.accent,
           headerTitleStyle: { fontWeight: '600' },
+          headerTitleAlign: 'center',
           contentStyle: { backgroundColor: colors.bgSubtle },
         }}
       >
@@ -78,13 +78,25 @@ export default function RootLayout() {
           name="updates"
           options={{ title: '更新与版本' }}
         />
+        <Stack.Screen
+          name="browser"
+          options={{ title: '内容编辑' }}
+        />
+        <Stack.Screen
+          name="editor"
+          options={{ title: '文件编辑' }}
+        />
+        <Stack.Screen
+          name="upload"
+          options={{ title: '图片上传' }}
+        />
       </Stack>
       {showSplash && (
         <View style={s.splashOverlay}>
           <ActivityIndicator size="large" color={colors.accent} />
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

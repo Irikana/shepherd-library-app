@@ -71,15 +71,15 @@ export default function HomeScreen() {
     },
     {
       title: '内容编辑',
-      desc: '浏览仓库文件树，编辑已有 HTML/CSS/JS',
-      enabled: false,
-      badge: 'Phase 2',
+      desc: '浏览仓库文件树，查看并编辑 HTML/CSS/JS/Markdown 等文本文件',
+      href: '/browser',
+      enabled: true,
     },
     {
       title: '图片上传',
-      desc: '选图压缩后上传到 image/poster/',
-      enabled: false,
-      badge: 'Phase 2',
+      desc: '从相册选图，原图上传到 image/ 等图片目录',
+      href: '/upload',
+      enabled: true,
     },
     {
       title: '日志/版本',

@@ -1,5 +1,8 @@
 // 牧羊人图书馆 App - 共享类型定义
 
+/** 撰写会话类型：普通文章 / 新闻（决定草稿恢复时跳转的页面） */
+export type ComposeKind = 'article' | 'news';
+
 /** 文章性质（录音/手写/信息/实验性），区别于文章分类（library/ 下目录） */
 export type ArticleType = '录音文章' | '手写文章' | '信息文章' | '实验性文章';
 

@@ -1,9 +1,10 @@
-// 新闻发布页：完整元数据表单（性质/标签/脚注等）+ 正文分段编辑 + 可选海报
+// 新闻发布页：完整元数据表单（性质/标签/脚注等）+ 正文分段编辑 + 可选海报 + 分页锁定
 // 发布时自动同步：文章页 / index.html 新闻区 / news.html / en/index.html / library.html / en/library/library.html
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
+  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
@@ -75,7 +76,8 @@ export default function NewsPublishScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const s = createStyles(colors);
-  const { form, setField, draftId, startDraft } = useComposeStore();
+  const { form, setField, draftId, startDraftWithKind, locked, scrollPositions, toggleLock, setScrollPosition } =
+    useComposeStore();
   const [tab, setTab] = useState<Tab>('meta');
   const [publishing, setPublishing] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -85,13 +87,13 @@ export default function NewsPublishScreen() {
   const [posterUri, setPosterUri] = useState<string | null>(null);
   const [posterBase64, setPosterBase64] = useState<string | null>(null);
 
-  // 无草稿上下文时生成新草稿（自动保存）
+  // 无草稿上下文时生成新草稿（自动保存，标记为新闻类型）
   useEffect(() => {
-    if (!draftId) startDraft();
+    if (!draftId) startDraftWithKind('news');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 自动保存草稿（防抖）
+  // 自动保存草稿（防抖，记录新闻类型以便从草稿箱恢复时回到本页）
   useEffect(() => {
     if (!draftId) return;
     const t = setTimeout(() => {
@@ -100,6 +102,7 @@ export default function NewsPublishScreen() {
         title: `[新闻] ${form.title.trim() || '未命名'}`,
         updatedAt: Date.now(),
         form,
+        kind: 'news',
       });
     }, 600);
     return () => clearTimeout(t);
@@ -349,22 +352,40 @@ export default function NewsPublishScreen() {
     );
   };
 
+  /** 切换标签页：保留浏览进度，切换时收起键盘 */
+  const switchTab = (next: Tab) => {
+    if (next === tab) return;
+    Keyboard.dismiss();
+    setTab(next);
+  };
+
   return (
     <View style={s.container}>
-      {/* 分段切换：元数据 / 正文 */}
+      {/* 分段切换 + 锁定开关 */}
       <View style={s.tabs}>
-        <Pressable style={[s.tab, tab === 'meta' && s.tabActive]} onPress={() => setTab('meta')}>
+        <Pressable style={[s.tab, tab === 'meta' && s.tabActive]} onPress={() => switchTab('meta')}>
           <Text style={[s.tabText, tab === 'meta' && s.tabTextActive]}>元数据</Text>
         </Pressable>
-        <Pressable style={[s.tab, tab === 'body' && s.tabActive]} onPress={() => setTab('body')}>
+        <Pressable style={[s.tab, tab === 'body' && s.tabActive]} onPress={() => switchTab('body')}>
           <Text style={[s.tabText, tab === 'body' && s.tabTextActive]}>正文</Text>
+        </Pressable>
+        <Pressable
+          style={[s.lockBtn, locked[tab] && s.lockBtnOn]}
+          onPress={() => toggleLock(tab)}
+          accessibilityLabel={locked[tab] ? '解锁当前页' : '锁定当前页'}
+        >
+          <Text style={[s.lockText, locked[tab] && s.lockTextOn]}>
+            {locked[tab] ? '已锁定' : '锁定'}
+          </Text>
         </Pressable>
       </View>
 
-      {/* 内容 */}
+      {/* 内容：两个标签页始终保持挂载，切换保留滚动位置 */}
       <View style={s.content}>
-        {tab === 'meta' ? (
+        <View style={[s.page, tab !== 'meta' && s.pageHidden]}>
           <MetaForm
+            scrollPosition={scrollPositions.meta}
+            onScroll={(y) => setScrollPosition('meta', y)}
             extra={
               <NewsOptions
                 kind={kind}
@@ -374,9 +395,13 @@ export default function NewsPublishScreen() {
               />
             }
           />
-        ) : (
-          <MarkdownEditor />
-        )}
+        </View>
+        <View style={[s.page, tab !== 'body' && s.pageHidden]}>
+          <MarkdownEditor
+            scrollPosition={scrollPositions.body}
+            onScroll={(y) => setScrollPosition('body', y)}
+          />
+        </View>
       </View>
 
       {/* 底部按钮 */}
@@ -425,7 +450,20 @@ const createStyles = (COLORS: Palette) =>
     tabActive: { backgroundColor: COLORS.bg, borderBottomWidth: 2, borderBottomColor: COLORS.accent },
     tabText: { fontSize: 15, color: COLORS.textSecondary },
     tabTextActive: { color: COLORS.accent, fontWeight: '600' },
+    lockBtn: {
+      borderLeftWidth: 1,
+      borderColor: COLORS.border,
+      paddingHorizontal: SPACING.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.bgSubtle,
+    },
+    lockBtnOn: { backgroundColor: COLORS.accent },
+    lockText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
+    lockTextOn: { color: '#fff', fontWeight: '600' },
     content: { flex: 1 },
+    page: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.bg },
+    pageHidden: { display: 'none' },
     label: {
       fontSize: 14,
       fontWeight: '600',

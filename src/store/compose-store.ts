@@ -1,6 +1,6 @@
 // 撰写表单状态管理（内存态，跨 compose <-> preview 导航共享）
 import { create } from 'zustand';
-import type { ArticleFormData, ArticleTagName, ArticleType } from '../types';
+import type { ArticleFormData, ArticleTagName, ArticleType, ComposeKind } from '../types';
 
 const today = () => {
   const d = new Date();
@@ -27,6 +27,12 @@ interface ComposeState {
   form: ArticleFormData;
   /** 当前草稿 id（用于自动保存/恢复），null 表示无草稿上下文 */
   draftId: string | null;
+  /** 当前撰写会话类型（决定草稿恢复时的跳转页面） */
+  kind: ComposeKind;
+  /** 各标签页的锁定状态（true = 只读防误触），默认均未锁定 */
+  locked: { meta: boolean; body: boolean };
+  /** 各标签页的滚动位置（contentOffsetY），切换时保留浏览进度 */
+  scrollPositions: { meta: number; body: number };
   generatedHtml: string | null;
   uploadStatus: 'idle' | 'uploading' | 'done' | 'error';
   uploadError: string | null;
@@ -38,8 +44,14 @@ interface ComposeState {
   setGeneratedHtml: (html: string | null) => void;
   /** 开始一篇新文章：生成草稿 id */
   startDraft: () => void;
+  /** 开始一篇新闻：生成草稿 id 并标记会话类型 */
+  startDraftWithKind: (kind: ComposeKind) => void;
   /** 从草稿恢复表单 */
-  loadDraft: (id: string, form: ArticleFormData) => void;
+  loadDraft: (id: string, form: ArticleFormData, kind?: ComposeKind) => void;
+  /** 切换某个标签页的锁定状态 */
+  toggleLock: (tab: 'meta' | 'body') => void;
+  /** 记录标签页滚动位置（仅记录，不触发草稿保存） */
+  setScrollPosition: (tab: 'meta' | 'body', y: number) => void;
   reset: () => void;
   setUploadStatus: (s: ComposeState['uploadStatus'], error?: string, path?: string) => void;
 }
@@ -47,6 +59,9 @@ interface ComposeState {
 export const useComposeStore = create<ComposeState>((set) => ({
   form: { ...defaultForm },
   draftId: null,
+  kind: 'article',
+  locked: { meta: false, body: false },
+  scrollPositions: { meta: 0, body: 0 },
   generatedHtml: null,
   uploadStatus: 'idle',
   uploadError: null,
@@ -78,13 +93,42 @@ export const useComposeStore = create<ComposeState>((set) => ({
       draftId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     }),
 
-  loadDraft: (id, form) =>
-    set({ draftId: id, form: { ...defaultForm, ...form }, generatedHtml: null, uploadStatus: 'idle', uploadError: null, uploadedPath: null }),
+  startDraftWithKind: (kind) =>
+    set({
+      draftId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind,
+    }),
+
+  loadDraft: (id, form, kind = 'article') =>
+    set({
+      draftId: id,
+      kind,
+      form: { ...defaultForm, ...form },
+      generatedHtml: null,
+      uploadStatus: 'idle',
+      uploadError: null,
+      uploadedPath: null,
+      locked: { meta: false, body: false },
+      scrollPositions: { meta: 0, body: 0 },
+    }),
+
+  toggleLock: (tab) =>
+    set((state) => ({
+      locked: { ...state.locked, [tab]: !state.locked[tab] },
+    })),
+
+  setScrollPosition: (tab, y) =>
+    set((state) => ({
+      scrollPositions: { ...state.scrollPositions, [tab]: y },
+    })),
 
   reset: () =>
     set({
       form: { ...defaultForm },
       draftId: null,
+      kind: 'article',
+      locked: { meta: false, body: false },
+      scrollPositions: { meta: 0, body: 0 },
       generatedHtml: null,
       uploadStatus: 'idle',
       uploadError: null,
