@@ -2,7 +2,7 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { COLORS } from '../theme';
+import { useTheme, type Palette } from '../theme';
 
 interface HtmlPreviewProps {
   html: string;
@@ -11,6 +11,8 @@ interface HtmlPreviewProps {
 }
 
 export function HtmlPreview({ html, baseUrl }: HtmlPreviewProps) {
+  const { colors } = useTheme();
+  const s = createStyles(colors);
   return (
     <View style={s.container}>
       <WebView
@@ -19,7 +21,7 @@ export function HtmlPreview({ html, baseUrl }: HtmlPreviewProps) {
         style={s.webview}
         renderLoading={() => (
           <View style={s.loading}>
-            <ActivityIndicator color={COLORS.accent} />
+            <ActivityIndicator color={colors.accent} />
           </View>
         )}
         startInLoadingState
@@ -28,8 +30,9 @@ export function HtmlPreview({ html, baseUrl }: HtmlPreviewProps) {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  webview: { flex: 1 },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-});
+const createStyles = (COLORS: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: COLORS.bg },
+    webview: { flex: 1 },
+    loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  });

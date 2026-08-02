@@ -9,6 +9,7 @@ const today = () => {
 
 export const defaultForm: ArticleFormData = {
   title: '',
+  titleEn: '',
   author: '薛柯道',
   createDate: today(),
   articleType: '信息文章',
@@ -22,6 +23,8 @@ export const defaultForm: ArticleFormData = {
 
 interface ComposeState {
   form: ArticleFormData;
+  /** 当前草稿 id（用于自动保存/恢复），null 表示无草稿上下文 */
+  draftId: string | null;
   generatedHtml: string | null;
   uploadStatus: 'idle' | 'uploading' | 'done' | 'error';
   uploadError: string | null;
@@ -31,12 +34,17 @@ interface ComposeState {
   toggleTag: (tag: ArticleTagName) => void;
   setArticleType: (t: ArticleType) => void;
   setGeneratedHtml: (html: string | null) => void;
+  /** 开始一篇新文章：生成草稿 id */
+  startDraft: () => void;
+  /** 从草稿恢复表单 */
+  loadDraft: (id: string, form: ArticleFormData) => void;
   reset: () => void;
   setUploadStatus: (s: ComposeState['uploadStatus'], error?: string, path?: string) => void;
 }
 
 export const useComposeStore = create<ComposeState>((set) => ({
   form: { ...defaultForm },
+  draftId: null,
   generatedHtml: null,
   uploadStatus: 'idle',
   uploadError: null,
@@ -63,7 +71,23 @@ export const useComposeStore = create<ComposeState>((set) => ({
 
   setGeneratedHtml: (html) => set({ generatedHtml: html }),
 
-  reset: () => set({ form: { ...defaultForm }, generatedHtml: null, uploadStatus: 'idle', uploadError: null, uploadedPath: null }),
+  startDraft: () =>
+    set({
+      draftId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    }),
+
+  loadDraft: (id, form) =>
+    set({ draftId: id, form: { ...defaultForm, ...form }, generatedHtml: null, uploadStatus: 'idle', uploadError: null, uploadedPath: null }),
+
+  reset: () =>
+    set({
+      form: { ...defaultForm },
+      draftId: null,
+      generatedHtml: null,
+      uploadStatus: 'idle',
+      uploadError: null,
+      uploadedPath: null,
+    }),
 
   setUploadStatus: (s, error, path) =>
     set({ uploadStatus: s, uploadError: error ?? null, uploadedPath: path ?? null }),

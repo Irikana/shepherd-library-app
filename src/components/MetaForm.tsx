@@ -1,17 +1,20 @@
 // 文章元数据表单
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { COLORS, SPACING } from '../theme';
+import { SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
 import { DatePickerModal } from './DatePickerModal';
 import { TimePickerModal } from './TimePickerModal';
 import type { ArticleTagName, ArticleType } from '../types';
 
-const ARTICLE_TYPES: ArticleType[] = ['录音文章', '手写文章', '信息文章'];
-const ALL_TAGS: ArticleTagName[] = ['新闻', '包含AI', '有删减', '无'];
+/** 文章性质（区别于文章分类：library/ 下每个子目录是一个分类） */
+const ARTICLE_TYPES: ArticleType[] = ['录音文章', '手写文章', '信息文章', '实验性文章'];
+const ALL_TAGS: ArticleTagName[] = ['新闻', '小说', '包含AI', '有删减', '无'];
 
 export function MetaForm() {
   const { form, setField, toggleTag, setArticleType } = useComposeStore();
+  const { colors } = useTheme();
+  const s = createStyles(colors);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
 
@@ -29,15 +32,28 @@ export function MetaForm() {
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
-      {/* 标题 */}
+      {/* 标题（中文） */}
       <Text style={s.label}>标题 *</Text>
       <TextInput
         style={s.input}
         value={form.title}
         onChangeText={(v) => setField('title', v)}
-        placeholder="文章标题（用于页面标题和文件名）"
-        placeholderTextColor={COLORS.textLight}
+        placeholder="文章中文标题（用于页面显示）"
+        placeholderTextColor={colors.textLight}
       />
+
+      {/* 标题（英文，文件名） */}
+      <Text style={s.label}>英文标题 *</Text>
+      <TextInput
+        style={s.input}
+        value={form.titleEn}
+        onChangeText={(v) => setField('titleEn', v)}
+        placeholder="英文标题，将作为文件名（如 a-new-article）"
+        placeholderTextColor={colors.textLight}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <Text style={s.hint}>英文标题将作为文件名，兼容性更好；中文标题用于页面显示</Text>
 
       {/* 作者 */}
       <Text style={s.label}>作者 *</Text>
@@ -46,7 +62,7 @@ export function MetaForm() {
         value={form.author}
         onChangeText={(v) => setField('author', v)}
         placeholder="作者名"
-        placeholderTextColor={COLORS.textLight}
+        placeholderTextColor={colors.textLight}
       />
 
       {/* 创建日期 */}
@@ -58,13 +74,13 @@ export function MetaForm() {
           </Text>
         </View>
         <Pressable style={s.sideBtn} onPress={() => setDatePickerVisible(true)}>
-          <Text style={s.sideBtnText}>📅 日历</Text>
+          <Text style={s.sideBtnText}>日历</Text>
         </Pressable>
       </View>
       <Text style={s.hint}>点击「日历」从月历中精确选日期，或点击「自定义」手动输入字符串</Text>
 
-      {/* 文章类型 */}
-      <Text style={s.label}>文章类型 *</Text>
+      {/* 文章性质 */}
+      <Text style={s.label}>文章性质 *</Text>
       <View style={s.chipRow}>
         {ARTICLE_TYPES.map((t) => (
           <Pressable
@@ -76,6 +92,7 @@ export function MetaForm() {
           </Pressable>
         ))}
       </View>
+      <Text style={s.hint}>文章性质指创作方式（录音/手写/信息/实验性），与文章分类（library/ 下目录）不同</Text>
 
       {/* 录音时长（条件） */}
       {form.articleType === '录音文章' && (
@@ -87,13 +104,13 @@ export function MetaForm() {
               value={form.recordingDuration}
               onChangeText={(v) => setField('recordingDuration', v)}
               placeholder="如 12:34"
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
             />
             <Pressable style={s.sideBtn} onPress={() => setTimePickerVisible(true)}>
-              <Text style={s.sideBtnText}>🕐 小时钟</Text>
+              <Text style={s.sideBtnText}>小时钟</Text>
             </Pressable>
           </View>
-          <Text style={s.hint}>点击「小时钟」在表盘上拖动选择时/分/秒，也可直接输入</Text>
+          <Text style={s.hint}>点击「小时钟」在轮盘上选择时/分/秒，也可直接输入</Text>
         </>
       )}
 
@@ -107,18 +124,20 @@ export function MetaForm() {
               key={tag}
               style={[
                 s.chip,
+                active && tag === '新闻' && s.chipNews,
                 active && tag === '包含AI' && s.chipAi,
                 active && tag === '有删减' && s.chipEdited,
-                active && tag !== '包含AI' && tag !== '有删减' && s.chipActive,
+                active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && s.chipActive,
               ]}
               onPress={() => toggleTag(tag)}
             >
               <Text
                 style={[
                   s.chipText,
+                  active && tag === '新闻' && s.chipTextNews,
                   active && tag === '包含AI' && s.chipTextAi,
                   active && tag === '有删减' && s.chipTextEdited,
-                  active && tag !== '包含AI' && tag !== '有删减' && s.chipTextActive,
+                  active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && s.chipTextActive,
                 ]}
               >
                 {tag}
@@ -135,7 +154,7 @@ export function MetaForm() {
         value={form.footerNote}
         onChangeText={(v) => setField('footerNote', v)}
         placeholder="生成文章页脚的补充说明"
-        placeholderTextColor={COLORS.textLight}
+        placeholderTextColor={colors.textLight}
         multiline
       />
 
@@ -150,11 +169,11 @@ export function MetaForm() {
             value={fn}
             onChangeText={(v) => updateFootnote(i, v)}
             placeholder={`脚注 ${i + 1} 的内容`}
-            placeholderTextColor={COLORS.textLight}
+            placeholderTextColor={colors.textLight}
             multiline
           />
           <Pressable style={s.footnoteDel} onPress={() => removeFootnote(i)}>
-            <Text style={s.footnoteDelText}>✕</Text>
+            <Text style={s.footnoteDelText}>删除</Text>
           </Pressable>
         </View>
       ))}
@@ -174,7 +193,7 @@ export function MetaForm() {
         <Switch
           value={form.includeMathJax}
           onValueChange={(v) => setField('includeMathJax', v)}
-          trackColor={{ false: COLORS.border, true: COLORS.accent }}
+          trackColor={{ false: colors.border, true: colors.accent }}
         />
       </View>
 
@@ -201,80 +220,83 @@ export function MetaForm() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: SPACING.md, paddingBottom: SPACING.xl },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xs,
-  },
-  hint: { fontSize: 12, color: COLORS.textLight, marginTop: 4, lineHeight: 17 },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.sm + 2,
-    fontSize: 15,
-    color: COLORS.text,
-    backgroundColor: COLORS.bg,
-  },
-  inputFlex: { flex: 1 },
-  inputMultiline: { minHeight: 60, textAlignVertical: 'top' },
-  inputRow: { flexDirection: 'row', alignItems: 'stretch' },
-  dateDisplay: { justifyContent: 'center' },
-  dateText: { fontSize: 15, color: COLORS.text },
-  datePlaceholder: { fontSize: 15, color: COLORS.textLight },
-  sideBtn: {
-    borderWidth: 1,
-    borderLeftWidth: 0,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.bgMuted,
-  },
-  sideBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
-  chip: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    backgroundColor: COLORS.bg,
-  },
-  chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
-  chipAi: { borderColor: COLORS.warning, backgroundColor: COLORS.tagAiBg },
-  chipEdited: { borderColor: COLORS.danger, backgroundColor: COLORS.tagEditedBg },
-  chipText: { fontSize: 13, color: COLORS.textSecondary },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
-  chipTextAi: { color: COLORS.tagAiText, fontWeight: '600' },
-  chipTextEdited: { color: COLORS.tagEditedText, fontWeight: '600' },
-  footnoteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.xs, marginTop: SPACING.xs },
-  footnoteIndex: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.accent,
-    paddingTop: SPACING.sm + 2,
-    minWidth: 34,
-  },
-  footnoteDel: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: SPACING.sm + 2,
-    backgroundColor: COLORS.bgMuted,
-  },
-  footnoteDelText: { fontSize: 13, color: COLORS.danger },
-  addBtn: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: COLORS.accent,
-    padding: SPACING.sm + 2,
-    alignItems: 'center',
-    marginTop: SPACING.xs,
-  },
-  addBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
-  switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md },
-});
+const createStyles = (COLORS: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    content: { padding: SPACING.md, paddingBottom: SPACING.xl },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: COLORS.textSecondary,
+      marginTop: SPACING.md,
+      marginBottom: SPACING.xs,
+    },
+    hint: { fontSize: 12, color: COLORS.textLight, marginTop: 4, lineHeight: 17 },
+    input: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.sm + 2,
+      fontSize: 15,
+      color: COLORS.text,
+      backgroundColor: COLORS.bg,
+    },
+    inputFlex: { flex: 1 },
+    inputMultiline: { minHeight: 60, textAlignVertical: 'top' },
+    inputRow: { flexDirection: 'row', alignItems: 'stretch' },
+    dateDisplay: { justifyContent: 'center' },
+    dateText: { fontSize: 15, color: COLORS.text },
+    datePlaceholder: { fontSize: 15, color: COLORS.textLight },
+    sideBtn: {
+      borderWidth: 1,
+      borderLeftWidth: 0,
+      borderColor: COLORS.border,
+      paddingHorizontal: SPACING.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.bgMuted,
+    },
+    sideBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+    chip: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+      backgroundColor: COLORS.bg,
+    },
+    chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
+    chipNews: { borderColor: COLORS.tagNewsBorder, backgroundColor: COLORS.tagNewsBg },
+    chipAi: { borderColor: COLORS.warning, backgroundColor: COLORS.tagAiBg },
+    chipEdited: { borderColor: COLORS.danger, backgroundColor: COLORS.tagEditedBg },
+    chipText: { fontSize: 13, color: COLORS.textSecondary },
+    chipTextActive: { color: '#fff', fontWeight: '600' },
+    chipTextNews: { color: COLORS.tagNewsText, fontWeight: '600' },
+    chipTextAi: { color: COLORS.tagAiText, fontWeight: '600' },
+    chipTextEdited: { color: COLORS.tagEditedText, fontWeight: '600' },
+    footnoteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.xs, marginTop: SPACING.xs },
+    footnoteIndex: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: COLORS.accent,
+      paddingTop: SPACING.sm + 2,
+      minWidth: 34,
+    },
+    footnoteDel: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingHorizontal: 10,
+      paddingVertical: SPACING.sm + 2,
+      backgroundColor: COLORS.bgMuted,
+    },
+    footnoteDelText: { fontSize: 13, color: COLORS.danger },
+    addBtn: {
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: COLORS.accent,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      marginTop: SPACING.xs,
+    },
+    addBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
+    switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md },
+  });

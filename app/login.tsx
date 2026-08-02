@@ -2,14 +2,16 @@
 import React, { useState } from 'react';
 import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuthStore } from '../src/store/auth-store';
-import { COLORS, SPACING } from '../src/theme';
+import { SPACING, useTheme, type Palette } from '../src/theme';
 import { REPO_CONFIG } from '../src/lib/config';
 import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
 
 export default function LoginScreen() {
   const { loginWithToken, loading, error, clearError } = useAuthStore();
+  const { isDark, colors } = useTheme();
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
+  const s = createStyles(colors);
 
   const handleLogin = async () => {
     if (!token.trim()) {
@@ -30,7 +32,7 @@ export default function LoginScreen() {
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <View style={s.header}>
-        <Image source={LogoImage} style={s.logo} resizeMode="contain" />
+        <Image source={LogoImage} style={[s.logo, isDark ? s.logoDark : s.logoLight]} resizeMode="contain" />
         <Text style={s.title}>SlyWrite</Text>
         <Text style={s.subtitle}>牧羊人图书馆 · 写作管理</Text>
       </View>
@@ -52,7 +54,7 @@ export default function LoginScreen() {
             if (error) clearError();
           }}
           placeholder="github_pat_xxxx..."
-          placeholderTextColor={COLORS.textLight}
+          placeholderTextColor={colors.textLight}
           secureTextEntry={!showToken}
           autoCapitalize="none"
           autoCorrect={false}
@@ -73,7 +75,7 @@ export default function LoginScreen() {
       </Pressable>
 
       <Pressable style={s.linkBtn} onPress={openTokenSettings}>
-        <Text style={s.linkText}>前往 GitHub 创建 Token ↗</Text>
+        <Text style={s.linkText}>前往 GitHub 创建 Token</Text>
       </Pressable>
 
       <View style={s.tipBox}>
@@ -86,67 +88,70 @@ export default function LoginScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bgSubtle },
-  content: { padding: SPACING.lg, paddingBottom: SPACING.xl },
-  header: { alignItems: 'center', marginBottom: SPACING.xl, marginTop: SPACING.xl },
-  logo: { width: 96, height: 96, marginBottom: SPACING.sm },
-  title: { fontSize: 26, fontWeight: '700', color: COLORS.accent },
-  subtitle: { fontSize: 14, color: COLORS.textLight, marginTop: 4 },
-  infoBox: {
-    backgroundColor: '#f0f7fd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#2980b9',
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  infoText: { fontSize: 13, color: '#2980b9', lineHeight: 20 },
-  bold: { fontWeight: '600' },
-  label: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs },
-  inputRow: { flexDirection: 'row', alignItems: 'stretch' },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.sm + 2,
-    fontSize: 15,
-    color: COLORS.text,
-    backgroundColor: COLORS.bg,
-  },
-  eyeBtn: {
-    borderWidth: 1,
-    borderLeftWidth: 0,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.bgMuted,
-  },
-  eyeText: { fontSize: 13, color: COLORS.textSecondary },
-  errorBox: {
-    backgroundColor: '#fdf2f2',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.danger,
-    padding: SPACING.sm + 2,
-    marginTop: SPACING.sm,
-  },
-  errorText: { fontSize: 13, color: COLORS.danger, lineHeight: 18 },
-  loginBtn: {
-    backgroundColor: COLORS.accent,
-    padding: SPACING.md,
-    alignItems: 'center',
-    marginTop: SPACING.lg,
-  },
-  btnDisabled: { opacity: 0.5 },
-  loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  linkBtn: { alignItems: 'center', marginTop: SPACING.md },
-  linkText: { color: COLORS.accent, fontSize: 14 },
-  tipBox: {
-    marginTop: SPACING.xl,
-    padding: SPACING.md,
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  tipTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs },
-  tipText: { fontSize: 12, color: COLORS.textLight, lineHeight: 18 },
-});
+const createStyles = (COLORS: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: COLORS.bgSubtle },
+    content: { padding: SPACING.lg, paddingBottom: SPACING.xl },
+    header: { alignItems: 'center', marginBottom: SPACING.xl, marginTop: SPACING.xl },
+    logo: { width: 96, height: 96, marginBottom: SPACING.sm },
+    logoDark: { tintColor: '#ffffff' },
+    logoLight: { tintColor: '#1a1a1a' },
+    title: { fontSize: 26, fontWeight: '700', color: COLORS.accent },
+    subtitle: { fontSize: 14, color: COLORS.textLight, marginTop: 4 },
+    infoBox: {
+      backgroundColor: COLORS.infoBg,
+      borderLeftWidth: 4,
+      borderLeftColor: '#2980b9',
+      padding: SPACING.md,
+      marginBottom: SPACING.lg,
+    },
+    infoText: { fontSize: 13, color: '#2980b9', lineHeight: 20 },
+    bold: { fontWeight: '600' },
+    label: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs },
+    inputRow: { flexDirection: 'row', alignItems: 'stretch' },
+    input: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.sm + 2,
+      fontSize: 15,
+      color: COLORS.text,
+      backgroundColor: COLORS.bg,
+    },
+    eyeBtn: {
+      borderWidth: 1,
+      borderLeftWidth: 0,
+      borderColor: COLORS.border,
+      paddingHorizontal: SPACING.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.bgMuted,
+    },
+    eyeText: { fontSize: 13, color: COLORS.textSecondary },
+    errorBox: {
+      backgroundColor: COLORS.dangerBg,
+      borderLeftWidth: 4,
+      borderLeftColor: COLORS.danger,
+      padding: SPACING.sm + 2,
+      marginTop: SPACING.sm,
+    },
+    errorText: { fontSize: 13, color: COLORS.danger, lineHeight: 18 },
+    loginBtn: {
+      backgroundColor: COLORS.accent,
+      padding: SPACING.md,
+      alignItems: 'center',
+      marginTop: SPACING.lg,
+    },
+    btnDisabled: { opacity: 0.5 },
+    loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    linkBtn: { alignItems: 'center', marginTop: SPACING.md },
+    linkText: { color: COLORS.accent, fontSize: 14 },
+    tipBox: {
+      marginTop: SPACING.xl,
+      padding: SPACING.md,
+      backgroundColor: COLORS.bg,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    },
+    tipTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: SPACING.xs },
+    tipText: { fontSize: 12, color: COLORS.textLight, lineHeight: 18 },
+  });

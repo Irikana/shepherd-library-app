@@ -121,15 +121,15 @@ export async function listDir(
   return res.json();
 }
 
-/** 写入/更新单个文件（Contents API PUT，更新需带 sha） */
+/** 写入/更新单个文件（Contents API PUT，更新需带 sha；二进制内容可用 contentIsBase64 直接传 base64） */
 export async function putFile(
   path: string,
   content: string,
-  opts: { sha?: string; message: string; branch?: string },
+  opts: { sha?: string; message: string; branch?: string; contentIsBase64?: boolean },
 ): Promise<{ commitSha: string }> {
   const body: Record<string, unknown> = {
     message: opts.message,
-    content: b64encode(content),
+    content: opts.contentIsBase64 ? content : b64encode(content),
     branch: opts.branch || REPO_CONFIG.branch,
   };
   if (opts.sha) body.sha = opts.sha;

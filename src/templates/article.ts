@@ -31,6 +31,14 @@ function renderTags(tags: ArticleTagName[]): string {
     .join('\n        ');
 }
 
+/** 渲染文章性质徽标（实验性文章带专属样式） */
+function renderTypeBadge(articleType: string): string {
+  if (articleType === '实验性文章') {
+    return '<span class="article-type-badge type-experimental">实验性文章</span>';
+  }
+  return `<span class="article-type-badge">${escapeHtml(articleType)}</span>`;
+}
+
 /** 文章页内联脚本块（各页相同，仅 PAGE_DISPLAY_NAME 不同） */
 const ARTICLE_SCRIPT = (displayName: string) => {
   // JS 字符串上下文转义：防 </script> 提前终止、防单引号破坏字符串
@@ -175,8 +183,8 @@ export function generateArticleHtml(data: ArticleFormData): string {
           <span class="article-meta-value">${dateCN}</span>
         </div>`,
     `      <div class="article-meta-item">
-          <span class="article-meta-label">文章类型：</span>
-          <span class="article-meta-value"><span class="article-type-badge">${escapeHtml(data.articleType)}</span></span>
+          <span class="article-meta-label">文章性质：</span>
+          <span class="article-meta-value">${renderTypeBadge(data.articleType)}</span>
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">标签：</span>

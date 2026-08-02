@@ -1,11 +1,15 @@
 // 牧羊人图书馆 App - 共享类型定义
 
-export type ArticleType = '录音文章' | '手写文章' | '信息文章';
+/** 文章性质（录音/手写/信息/实验性），区别于文章分类（library/ 下目录） */
+export type ArticleType = '录音文章' | '手写文章' | '信息文章' | '实验性文章';
 
-export type ArticleTagName = '新闻' | '包含AI' | '有删减' | '无';
+/** 文章属性标签 */
+export type ArticleTagName = '新闻' | '小说' | '包含AI' | '有删减' | '无';
 
 export interface ArticleFormData {
   title: string;
+  /** 英文标题：作为文件名使用（兼容性更好） */
+  titleEn: string;
   author: string;
   createDate: string; // YYYY-MM-DD
   articleType: ArticleType;

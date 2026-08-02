@@ -1,4 +1,6 @@
 // Markdown 正文编辑器（多行输入 + 快捷插入工具栏 + 数学符号面板）
+// 插入交互修复：工具栏按钮用 onPressIn 立即响应（Android 输入法打开时无需先收起键盘），
+// 插入后通过 setNativeProps 恢复光标位置并保持输入框焦点
 import React, { useState } from 'react';
 import {
   Modal,
@@ -9,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { COLORS, FONT, SPACING } from '../theme';
+import { FONT, SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
 
 interface InsertAction {
@@ -195,17 +197,28 @@ const SYMBOL_GROUPS: { title: string; items: { label: string; insert: string }[]
 
 export function MarkdownEditor() {
   const { form, setField } = useComposeStore();
+  const { colors } = useTheme();
+  const s = createStyles(colors);
+  const inputRef = React.useRef<TextInput>(null);
   const selectionRef = React.useRef({ start: 0, end: 0 });
   const [symbolsVisible, setSymbolsVisible] = useState(false);
+
+  /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
+  const applyInsert = (text: string, cursor: number) => {
+    setField('bodyMarkdown', text);
+    selectionRef.current = { start: cursor, end: cursor };
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (input) {
+        input.setNativeProps({ selection: { start: cursor, end: cursor } });
+      }
+    });
+  };
 
   const handleInsert = (action: InsertAction) => {
     const { start, end } = selectionRef.current;
     const { text, cursor } = action.insert(form.bodyMarkdown, start, end);
-    setField('bodyMarkdown', text);
-    // 注意：TextInput 的 selection 需在下个事件循环设置才生效
-    setTimeout(() => {
-      selectionRef.current = { start: cursor, end: cursor };
-    }, 0);
+    applyInsert(text, cursor);
   };
 
   /** 插入符号片段（含 § 光标占位） */
@@ -214,10 +227,7 @@ export function MarkdownEditor() {
     const caret = snippet.indexOf('§');
     const clean = snippet.replace('§', '');
     const text = form.bodyMarkdown.slice(0, start) + clean + form.bodyMarkdown.slice(end);
-    setField('bodyMarkdown', text);
-    setTimeout(() => {
-      selectionRef.current = { start: start + (caret >= 0 ? caret : clean.length), end: start + (caret >= 0 ? caret : clean.length) };
-    }, 0);
+    applyInsert(text, start + (caret >= 0 ? caret : clean.length));
   };
 
   /** 脚注按钮：自动编号插入 [^n] */
@@ -232,10 +242,7 @@ export function MarkdownEditor() {
     }
     const n = Math.max(maxN, form.footnotes.length) + 1;
     const text = body.slice(0, start) + `[^${n}]` + body.slice(end);
-    setField('bodyMarkdown', text);
-    setTimeout(() => {
-      selectionRef.current = { start: start + 3 + String(n).length, end: start + 3 + String(n).length };
-    }, 0);
+    applyInsert(text, start + 3 + String(n).length);
   };
 
   return (
@@ -243,19 +250,25 @@ export function MarkdownEditor() {
       <View style={s.toolbar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {ACTIONS.map((a) => (
-            <Pressable key={a.label} style={s.toolBtn} onPress={() => handleInsert(a)}>
+            <Pressable
+              key={a.label}
+              style={s.toolBtn}
+              // onPressIn：Android 输入法打开时第一次触摸即触发，无需先收起键盘
+              onPressIn={() => handleInsert(a)}
+            >
               <Text style={s.toolText}>{a.label}</Text>
             </Pressable>
           ))}
-          <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPress={insertFootnote}>
+          <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPressIn={insertFootnote}>
             <Text style={s.toolText}>脚注</Text>
           </Pressable>
-          <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPress={() => setSymbolsVisible(true)}>
+          <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPressIn={() => setSymbolsVisible(true)}>
             <Text style={s.toolText}>数学符号</Text>
           </Pressable>
         </ScrollView>
       </View>
       <TextInput
+        ref={inputRef}
         style={s.editor}
         value={form.bodyMarkdown}
         onChangeText={(v) => setField('bodyMarkdown', v)}
@@ -266,7 +279,7 @@ export function MarkdownEditor() {
           };
         }}
         placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
-        placeholderTextColor={COLORS.textLight}
+        placeholderTextColor={colors.textLight}
         multiline
         textAlignVertical="top"
         autoCapitalize="none"
@@ -315,85 +328,86 @@ export function MarkdownEditor() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1 },
-  toolbar: {
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.bgSubtle,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-  },
-  toolBtn: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    marginRight: SPACING.xs,
-    backgroundColor: COLORS.bg,
-  },
-  toolBtnFootnote: { borderColor: COLORS.accent, backgroundColor: '#eef4fa' },
-  toolBtnSymbols: { borderColor: COLORS.accent, backgroundColor: '#eef4fa' },
-  toolText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
-  editor: {
-    flex: 1,
-    padding: SPACING.md,
-    fontSize: FONT.size,
-    fontFamily: FONT.mono,
-    lineHeight: FONT.lineHeight,
-    color: COLORS.text,
-    backgroundColor: COLORS.bg,
-    textAlignVertical: 'top',
-  },
-  counter: {
-    textAlign: 'right',
-    fontSize: 12,
-    color: COLORS.textLight,
-    padding: SPACING.xs,
-    backgroundColor: COLORS.bgSubtle,
-  },
-  symbolOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  symbolPanel: {
-    backgroundColor: COLORS.bg,
-    borderTopWidth: 1,
-    borderColor: COLORS.border,
-    maxHeight: '75%',
-    padding: SPACING.md,
-  },
-  symbolTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-  },
-  symbolScroll: { flexGrow: 0 },
-  symbolGroupTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  symbolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
-  symbolBtn: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: COLORS.bgSubtle,
-  },
-  symbolLabel: { fontSize: 12, color: COLORS.accent, fontFamily: FONT.mono },
-  symbolClose: {
-    marginTop: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.sm + 2,
-    alignItems: 'center',
-    backgroundColor: COLORS.bgSubtle,
-  },
-  symbolCloseText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
-});
+const createStyles = (COLORS: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    toolbar: {
+      borderBottomWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.sm,
+    },
+    toolBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingVertical: 5,
+      paddingHorizontal: 12,
+      marginRight: SPACING.xs,
+      backgroundColor: COLORS.bg,
+    },
+    toolBtnFootnote: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
+    toolBtnSymbols: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
+    toolText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
+    editor: {
+      flex: 1,
+      padding: SPACING.md,
+      fontSize: FONT.size,
+      fontFamily: FONT.mono,
+      lineHeight: FONT.lineHeight,
+      color: COLORS.text,
+      backgroundColor: COLORS.bg,
+      textAlignVertical: 'top',
+    },
+    counter: {
+      textAlign: 'right',
+      fontSize: 12,
+      color: COLORS.textLight,
+      padding: SPACING.xs,
+      backgroundColor: COLORS.bgSubtle,
+    },
+    symbolOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'flex-end',
+    },
+    symbolPanel: {
+      backgroundColor: COLORS.bg,
+      borderTopWidth: 1,
+      borderColor: COLORS.border,
+      maxHeight: '75%',
+      padding: SPACING.md,
+    },
+    symbolTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: COLORS.text,
+      marginBottom: SPACING.sm,
+    },
+    symbolScroll: { flexGrow: 0 },
+    symbolGroupTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: COLORS.textSecondary,
+      marginTop: SPACING.sm,
+      marginBottom: SPACING.xs,
+    },
+    symbolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+    symbolBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      backgroundColor: COLORS.bgSubtle,
+    },
+    symbolLabel: { fontSize: 12, color: COLORS.accent, fontFamily: FONT.mono },
+    symbolClose: {
+      marginTop: SPACING.md,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      backgroundColor: COLORS.bgSubtle,
+    },
+    symbolCloseText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
+  });

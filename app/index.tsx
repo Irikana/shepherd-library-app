@@ -1,12 +1,14 @@
-// 首页：功能入口卡片 + 版本号 + 速率限制
+// 首页：功能入口卡片 + 版本号 + 速率限制 + 设置入口
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/auth-store';
+import { useDraftsStore } from '../src/store/drafts-store';
 import { rateLimit } from '../src/lib/rate-limit';
-import { COLORS, SPACING } from '../src/theme';
+import { SPACING, useTheme, type Palette } from '../src/theme';
 import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
@@ -18,39 +20,6 @@ interface FeatureItem {
   enabled: boolean;
   badge?: string;
 }
-
-const FEATURES: FeatureItem[] = [
-  {
-    title: '撰写文章',
-    desc: '表单 + Markdown 编辑器，生成合规 HTML 后上传到 library/paper/',
-    href: '/compose/article',
-    enabled: true,
-  },
-  {
-    title: '新闻发布',
-    desc: '原子提交多文件，自动维护 6 条上限与海报替换',
-    enabled: false,
-    badge: 'Phase 2',
-  },
-  {
-    title: '内容编辑',
-    desc: '浏览仓库文件树，编辑已有 HTML/CSS/JS',
-    enabled: false,
-    badge: 'Phase 2',
-  },
-  {
-    title: '图片上传',
-    desc: '选图压缩后上传到 image/poster/',
-    enabled: false,
-    badge: 'Phase 2',
-  },
-  {
-    title: '日志/版本',
-    desc: '查看版本号与更新日志',
-    enabled: false,
-    badge: 'Phase 2',
-  },
-];
 
 /** 平台感知的确认对话框 */
 function confirmDialog(
@@ -73,8 +42,52 @@ function confirmDialog(
 export default function HomeScreen() {
   const router = useRouter();
   const { login, version, logout, refreshVersion } = useAuthStore();
+  const { isDark, colors } = useTheme();
+  const s = createStyles(colors);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+
+  const draftCount = useDraftsStore((st) => st.drafts.length);
+
+  const FEATURES: FeatureItem[] = [
+    {
+      title: '撰写文章',
+      desc: '双标题 + Markdown 编辑器，生成合规 HTML 后分类上传，并自动同步 library.html',
+      href: '/compose/article',
+      enabled: true,
+    },
+    {
+      title: '新闻发布',
+      desc: '撰写新闻并同步主页新闻区、news.html 与英文主页',
+      href: '/news/publish',
+      enabled: true,
+    },
+    {
+      title: '草稿箱',
+      desc: '自动保存的未完成文章，可恢复继续编辑',
+      href: '/drafts',
+      enabled: true,
+      badge: draftCount > 0 ? `${draftCount} 篇` : undefined,
+    },
+    {
+      title: '内容编辑',
+      desc: '浏览仓库文件树，编辑已有 HTML/CSS/JS',
+      enabled: false,
+      badge: 'Phase 2',
+    },
+    {
+      title: '图片上传',
+      desc: '选图压缩后上传到 image/poster/',
+      enabled: false,
+      badge: 'Phase 2',
+    },
+    {
+      title: '日志/版本',
+      desc: '查看版本号与更新日志',
+      enabled: false,
+      badge: 'Phase 2',
+    },
+  ];
 
   const handleLogout = () => {
     confirmDialog('退出登录', '确定要退出吗？Token 将从本机清除。', () => logout());
@@ -105,14 +118,23 @@ export default function HomeScreen() {
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* 品牌区 */}
       <View style={s.brand}>
-        <Image source={LogoImage} style={s.logo} resizeMode="contain" />
+        <Image
+          source={LogoImage}
+          style={[s.logo, isDark ? s.logoDark : s.logoLight]}
+          resizeMode="contain"
+        />
         <View style={{ flex: 1 }}>
           <Text style={s.brandName}>SlyWrite</Text>
           <Text style={s.brandSub}>牧羊人图书馆 · 写作管理</Text>
         </View>
-        <View style={s.appVersionBox}>
-          <Text style={s.appVersionLabel}>软件版本</Text>
-          <Text style={s.appVersionValue}>v{APP_VERSION}</Text>
+        <View style={s.brandRight}>
+          <View style={s.appVersionBox}>
+            <Text style={s.appVersionLabel}>软件版本</Text>
+            <Text style={s.appVersionValue}>v{APP_VERSION}</Text>
+          </View>
+          <Pressable style={s.settingsBtn} onPress={() => router.push('/settings')} hitSlop={8}>
+            <MaterialIcons name="settings" size={22} color={colors.accent} />
+          </Pressable>
         </View>
       </View>
 
@@ -132,7 +154,7 @@ export default function HomeScreen() {
       {rateLimit.isLow && (
         <View style={s.rateWarn}>
           <Text style={s.rateWarnText}>
-            ⚠ API 速率剩余 {rateLimit.state.remaining}，重置于{' '}
+            API 速率剩余 {rateLimit.state.remaining}，重置于{' '}
             {rateLimit.resetDate?.toLocaleTimeString() ?? '稍后'}
           </Text>
         </View>
@@ -178,98 +200,110 @@ export default function HomeScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bgSubtle },
-  content: { padding: SPACING.md, paddingBottom: SPACING.xl },
-  brand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  logo: { width: 56, height: 56, marginRight: SPACING.sm },
-  brandName: { fontSize: 22, fontWeight: '700', color: COLORS.accent },
-  brandSub: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
-  appVersionBox: { alignItems: 'flex-end', marginLeft: SPACING.sm },
-  appVersionLabel: { fontSize: 11, color: COLORS.textLight },
-  appVersionValue: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600', marginTop: 2 },
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  statusLabel: { fontSize: 12, color: COLORS.textLight },
-  statusValue: { fontSize: 15, color: COLORS.accent, fontWeight: '600', marginTop: 2 },
-  versionBox: { alignItems: 'flex-end' },
-  versionLabel: { fontSize: 12, color: COLORS.textLight },
-  versionValue: { fontSize: 16, color: COLORS.accent, fontWeight: '700', marginTop: 2 },
-  rateWarn: {
-    backgroundColor: '#fdf2f2',
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.danger,
-    padding: SPACING.sm + 2,
-    marginBottom: SPACING.md,
-  },
-  rateWarnText: { fontSize: 13, color: COLORS.danger },
-  refreshMsgBox: {
-    backgroundColor: '#f0f7fd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#2980b9',
-    padding: SPACING.sm + 2,
-    marginBottom: SPACING.md,
-  },
-  refreshMsgText: { fontSize: 13, color: '#2980b9' },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
-  },
-  card: {
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  cardDisabled: { opacity: 0.55 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text },
-  textDisabled: { color: COLORS.textLight },
-  cardDesc: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4, lineHeight: 20 },
-  badge: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textLight,
-    backgroundColor: COLORS.bgMuted,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  actions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
-  btnDisabled: { opacity: 0.5 },
-  refreshBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    padding: SPACING.sm + 2,
-    alignItems: 'center',
-  },
-  refreshText: { color: COLORS.accent, fontWeight: '600', fontSize: 14 },
-  logoutBtn: {
-    borderWidth: 1,
-    borderColor: COLORS.danger,
-    padding: SPACING.sm + 2,
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-  },
-  logoutText: { color: COLORS.danger, fontWeight: '600', fontSize: 14 },
-});
+const createStyles = (COLORS: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: COLORS.bgSubtle },
+    content: { padding: SPACING.md, paddingBottom: SPACING.xl },
+    brand: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: COLORS.bg,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    logo: { width: 56, height: 56, marginRight: SPACING.sm },
+    logoDark: { tintColor: '#ffffff' },
+    logoLight: { tintColor: '#1a1a1a' },
+    brandName: { fontSize: 22, fontWeight: '700', color: COLORS.accent },
+    brandSub: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+    brandRight: { flexDirection: 'row', alignItems: 'center', marginLeft: SPACING.sm },
+    appVersionBox: { alignItems: 'flex-end', marginRight: SPACING.sm },
+    appVersionLabel: { fontSize: 11, color: COLORS.textLight },
+    appVersionValue: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600', marginTop: 2 },
+    settingsBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+      padding: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    statusBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: COLORS.bg,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    statusLabel: { fontSize: 12, color: COLORS.textLight },
+    statusValue: { fontSize: 15, color: COLORS.accent, fontWeight: '600', marginTop: 2 },
+    versionBox: { alignItems: 'flex-end' },
+    versionLabel: { fontSize: 12, color: COLORS.textLight },
+    versionValue: { fontSize: 16, color: COLORS.accent, fontWeight: '700', marginTop: 2 },
+    rateWarn: {
+      backgroundColor: COLORS.dangerBg,
+      borderLeftWidth: 4,
+      borderLeftColor: COLORS.danger,
+      padding: SPACING.sm + 2,
+      marginBottom: SPACING.md,
+    },
+    rateWarnText: { fontSize: 13, color: COLORS.danger },
+    refreshMsgBox: {
+      backgroundColor: COLORS.infoBg,
+      borderLeftWidth: 4,
+      borderLeftColor: COLORS.accentLight,
+      padding: SPACING.sm + 2,
+      marginBottom: SPACING.md,
+    },
+    refreshMsgText: { fontSize: 13, color: COLORS.accentLight },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: COLORS.textSecondary,
+      marginBottom: SPACING.sm,
+    },
+    card: {
+      backgroundColor: COLORS.bg,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.sm,
+    },
+    cardDisabled: { opacity: 0.55 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    cardTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text },
+    textDisabled: { color: COLORS.textLight },
+    cardDesc: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4, lineHeight: 20 },
+    badge: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: COLORS.textLight,
+      backgroundColor: COLORS.bgMuted,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+    },
+    actions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
+    btnDisabled: { opacity: 0.5 },
+    refreshBtn: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+    },
+    refreshText: { color: COLORS.accent, fontWeight: '600', fontSize: 14 },
+    logoutBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.danger,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      paddingHorizontal: SPACING.lg,
+    },
+    logoutText: { color: COLORS.danger, fontWeight: '600', fontSize: 14 },
+  });

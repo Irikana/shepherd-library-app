@@ -1,4 +1,5 @@
 // 创建日期选择器：月历弹窗（点击选日）+ 自定义字符串输入模式
+// 年份/月份可分别点击选中，选中后两侧轮播按钮（‹ ›）切换的是选中对象
 import React, { useMemo, useState } from 'react';
 import {
   Modal,
@@ -8,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { COLORS, SPACING } from '../theme';
+import { SPACING, useTheme, type Palette } from '../theme';
 
 interface DatePickerModalProps {
   visible: boolean;
@@ -19,6 +20,8 @@ interface DatePickerModalProps {
 }
 
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+
+type Unit = 'year' | 'month';
 
 /** 解析 YYYY-MM-DD，失败返回 null（含严格的天数校验） */
 function parseDate(str: string): { y: number; m: number; d: number } | null {
@@ -41,11 +44,14 @@ function pad2(n: number): string {
 }
 
 export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePickerModalProps) {
+  const { colors } = useTheme();
+  const s = createStyles(colors);
   const initial = parseDate(value);
   const now = new Date();
   const [viewYear, setViewYear] = useState(initial?.y ?? now.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial?.m ?? now.getMonth() + 1);
   const [selected, setSelected] = useState(initial);
+  const [unit, setUnit] = useState<Unit>('month');
   const [customMode, setCustomMode] = useState(false);
   const [customText, setCustomText] = useState(value);
 
@@ -58,6 +64,7 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
       setSelected(cur);
       setCustomText(value);
       setCustomMode(false);
+      setUnit('month');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -85,13 +92,18 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
   const isSelected = (c: (typeof cells)[number]) =>
     !!selected && selected.y === c.year && selected.m === c.month && selected.d === c.day;
 
-  const shiftMonth = (delta: number) => {
-    let y = viewYear;
-    let m = viewMonth + delta;
-    if (m < 1) { m = 12; y--; }
-    if (m > 12) { m = 1; y++; }
-    setViewYear(y);
-    setViewMonth(m);
+  /** 两侧轮播按钮：切换当前选中对象（年份或月份） */
+  const shiftFocused = (delta: number) => {
+    if (unit === 'year') {
+      setViewYear((y) => y + delta);
+    } else {
+      let y = viewYear;
+      let m = viewMonth + delta;
+      if (m < 1) { m = 12; y--; }
+      if (m > 12) { m = 1; y++; }
+      setViewYear(y);
+      setViewMonth(m);
+    }
   };
 
   const handleConfirm = () => {
@@ -117,7 +129,7 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
                 value={customText}
                 onChangeText={setCustomText}
                 placeholder="如 2026年5月20日 / 2026-05-20"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 autoFocus
               />
               <Text style={s.hint}>可输入任意字符串，将原样写入创建日期</Text>
@@ -125,24 +137,28 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
           ) : (
             <>
               <Text style={s.title}>选择日期</Text>
-              {/* 年月切换 */}
+              {/* 年月切换：年份/月份可分别点击选中，两侧按钮切换选中对象 */}
               <View style={s.navRow}>
-                <Pressable style={s.navBtn} onPress={() => shiftMonth(-1)}>
+                <Pressable style={s.navBtn} onPress={() => shiftFocused(-1)}>
                   <Text style={s.navText}>‹</Text>
                 </Pressable>
                 <View style={s.yearMonth}>
-                  <Pressable onPress={() => setViewYear(viewYear - 1)} hitSlop={8}>
-                    <Text style={s.yearText}>{viewYear}年</Text>
+                  <Pressable onPress={() => setUnit('year')} hitSlop={8}>
+                    <Text style={[s.yearText, unit === 'year' && s.unitActive]}>
+                      {viewYear}年
+                    </Text>
                   </Pressable>
-                  <Text style={s.monthText}>
-                    {viewMonth}月
-                    <Text style={s.monthHint}>（点年份可切换）</Text>
-                  </Text>
+                  <Pressable onPress={() => setUnit('month')} hitSlop={8}>
+                    <Text style={[s.monthText, unit === 'month' && s.unitActive]}>
+                      {viewMonth}月
+                    </Text>
+                  </Pressable>
                 </View>
-                <Pressable style={s.navBtn} onPress={() => shiftMonth(1)}>
+                <Pressable style={s.navBtn} onPress={() => shiftFocused(1)}>
                   <Text style={s.navText}>›</Text>
                 </Pressable>
               </View>
+              <Text style={s.hint}>点击「年」或「月」可分别选中，两侧按钮切换选中的年份或月份</Text>
               {/* 星期行 */}
               <View style={s.weekRow}>
                 {WEEK_LABELS.map((w) => (
@@ -207,90 +223,97 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
   );
 }
 
-const s = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    padding: SPACING.lg,
-  },
-  panel: {
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.md,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-  },
-  navBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.bgSubtle,
-  },
-  navText: { fontSize: 18, color: COLORS.accent, fontWeight: '600' },
-  yearMonth: { alignItems: 'center' },
-  yearText: { fontSize: 16, fontWeight: '700', color: COLORS.accent },
-  monthText: { fontSize: 14, color: COLORS.textSecondary, marginTop: 2 },
-  monthHint: { fontSize: 11, color: COLORS.textLight },
-  weekRow: { flexDirection: 'row', marginBottom: 4 },
-  weekLabel: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    color: COLORS.textLight,
-    paddingVertical: 4,
-  },
-  weekend: { color: COLORS.danger },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayCell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayCellActive: { backgroundColor: COLORS.accent },
-  dayText: { fontSize: 14, color: COLORS.text },
-  dayTextDim: { color: COLORS.textLight, opacity: 0.6 },
-  dayTextActive: { color: '#fff', fontWeight: '600' },
-  customInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.sm + 2,
-    fontSize: 15,
-    color: COLORS.text,
-    backgroundColor: COLORS.bg,
-  },
-  hint: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.xs },
-  footer: {
-    flexDirection: 'row',
-    marginTop: SPACING.md,
-    gap: SPACING.sm,
-  },
-  footerBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: SPACING.sm + 2,
-    alignItems: 'center',
-    backgroundColor: COLORS.bgSubtle,
-  },
-  cancelBtn: { flex: 1 },
-  confirmBtn: { flex: 1, backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  footerText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
-  cancelText: { color: COLORS.danger },
-  confirmText: { color: '#fff', fontWeight: '600' },
-});
+const createStyles = (COLORS: Palette) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'center',
+      padding: SPACING.lg,
+    },
+    panel: {
+      backgroundColor: COLORS.bg,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.md,
+    },
+    title: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: COLORS.text,
+      marginBottom: SPACING.sm,
+    },
+    navRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: SPACING.xs,
+    },
+    navBtn: {
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+    },
+    navText: { fontSize: 18, color: COLORS.accent, fontWeight: '600' },
+    yearMonth: { alignItems: 'center' },
+    yearText: { fontSize: 16, fontWeight: '700', color: COLORS.text, paddingVertical: 2 },
+    monthText: { fontSize: 14, color: COLORS.textSecondary, paddingVertical: 2 },
+    unitActive: {
+      color: COLORS.accent,
+      backgroundColor: COLORS.bgSubtle,
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      paddingHorizontal: 6,
+    },
+    weekRow: { flexDirection: 'row', marginBottom: 4 },
+    weekLabel: {
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 12,
+      color: COLORS.textLight,
+      paddingVertical: 4,
+    },
+    weekend: { color: COLORS.danger },
+    grid: { flexDirection: 'row', flexWrap: 'wrap' },
+    dayCell: {
+      width: `${100 / 7}%`,
+      aspectRatio: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dayCellActive: { backgroundColor: COLORS.accent },
+    dayText: { fontSize: 14, color: COLORS.text },
+    dayTextDim: { color: COLORS.textLight, opacity: 0.6 },
+    dayTextActive: { color: '#fff', fontWeight: '600' },
+    customInput: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.sm + 2,
+      fontSize: 15,
+      color: COLORS.text,
+      backgroundColor: COLORS.bg,
+    },
+    hint: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.xs, marginBottom: SPACING.sm },
+    footer: {
+      flexDirection: 'row',
+      marginTop: SPACING.md,
+      gap: SPACING.sm,
+    },
+    footerBtn: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingVertical: SPACING.sm + 2,
+      alignItems: 'center',
+      backgroundColor: COLORS.bgSubtle,
+    },
+    cancelBtn: { flex: 1 },
+    confirmBtn: { flex: 1, backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+    footerText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
+    cancelText: { color: COLORS.danger },
+    confirmText: { color: '#fff', fontWeight: '600' },
+  });
