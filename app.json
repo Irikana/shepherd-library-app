@@ -2,18 +2,22 @@
   "expo": {
     "name": "SlyWrite",
     "slug": "shepherd-library-app",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "orientation": "portrait",
     "scheme": "shepherd-library",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./src/assets/shephrdsLibraryWriteWithBackround.png",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "icon": "./src/assets/shephrdsLibraryWriteWithBackround.png"
     },
     "android": {
       "package": "io.github.irikana.shepherdlibrary",
+      "icon": "./src/assets/shephrdsLibraryWriteWithBackround.png",
       "adaptiveIcon": {
-        "backgroundColor": "#2c3e50"
+        "backgroundColor": "#000000",
+        "foregroundImage": "./src/assets/shephrdsLibraryWriteWithBackround.png"
       }
     },
     "web": {
@@ -21,7 +25,13 @@
       "output": "server"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 SlyWrite 访问相册，以选择新闻海报图片。"
+        }
+      ]
     ],
     "experiments": {
       "tsconfigPaths": true

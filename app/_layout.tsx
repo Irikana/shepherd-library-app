@@ -71,6 +71,10 @@ export default function RootLayout() {
           name="drafts"
           options={{ title: '草稿箱' }}
         />
+        <Stack.Screen
+          name="updates"
+          options={{ title: '更新与版本' }}
+        />
       </Stack>
       {showSplash && (
         <View style={s.splashOverlay}>

@@ -248,21 +248,25 @@ export function MarkdownEditor() {
   return (
     <View style={s.container}>
       <View style={s.toolbar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          // 键盘弹出时点击按钮一次即响应（不消费首次触摸），滑动不会误触（onPress 需抬起且未移动）
+          keyboardShouldPersistTaps="handled"
+        >
           {ACTIONS.map((a) => (
             <Pressable
               key={a.label}
               style={s.toolBtn}
-              // onPressIn：Android 输入法打开时第一次触摸即触发，无需先收起键盘
-              onPressIn={() => handleInsert(a)}
+              onPress={() => handleInsert(a)}
             >
               <Text style={s.toolText}>{a.label}</Text>
             </Pressable>
           ))}
-          <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPressIn={insertFootnote}>
+          <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPress={insertFootnote}>
             <Text style={s.toolText}>脚注</Text>
           </Pressable>
-          <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPressIn={() => setSymbolsVisible(true)}>
+          <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPress={() => setSymbolsVisible(true)}>
             <Text style={s.toolText}>数学符号</Text>
           </Pressable>
         </ScrollView>
@@ -297,7 +301,7 @@ export function MarkdownEditor() {
         <View style={s.symbolOverlay}>
           <View style={s.symbolPanel}>
             <Text style={s.symbolTitle}>数学符号</Text>
-            <ScrollView style={s.symbolScroll}>
+            <ScrollView style={s.symbolScroll} keyboardShouldPersistTaps="handled">
               {SYMBOL_GROUPS.map((g) => (
                 <View key={g.title}>
                   <Text style={s.symbolGroupTitle}>{g.title}</Text>

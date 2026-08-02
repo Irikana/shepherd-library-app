@@ -4,12 +4,12 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
-import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../src/store/auth-store';
 import { useDraftsStore } from '../src/store/drafts-store';
 import { rateLimit } from '../src/lib/rate-limit';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
+import GearImage from '../src/assets/settings-gear.png';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
 
@@ -83,9 +83,9 @@ export default function HomeScreen() {
     },
     {
       title: '日志/版本',
-      desc: '查看版本号与更新日志',
-      enabled: false,
-      badge: 'Phase 2',
+      desc: '检查更新、下载最新 APK、访问 SlyWrite 网站',
+      href: '/updates',
+      enabled: true,
     },
   ];
 
@@ -133,7 +133,7 @@ export default function HomeScreen() {
             <Text style={s.appVersionValue}>v{APP_VERSION}</Text>
           </View>
           <Pressable style={s.settingsBtn} onPress={() => router.push('/settings')} hitSlop={8}>
-            <MaterialIcons name="settings" size={22} color={colors.accent} />
+            <Image source={GearImage} style={s.settingsGear} resizeMode="contain" />
           </Pressable>
         </View>
       </View>
@@ -226,10 +226,11 @@ const createStyles = (COLORS: Palette) =>
       borderWidth: 1,
       borderColor: COLORS.border,
       backgroundColor: COLORS.bgSubtle,
-      padding: 6,
+      padding: 5,
       alignItems: 'center',
       justifyContent: 'center',
     },
+    settingsGear: { width: 22, height: 22 },
     statusBar: {
       flexDirection: 'row',
       alignItems: 'center',

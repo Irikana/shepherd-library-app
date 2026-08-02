@@ -11,7 +11,7 @@ import type { ArticleTagName, ArticleType } from '../types';
 const ARTICLE_TYPES: ArticleType[] = ['录音文章', '手写文章', '信息文章', '实验性文章'];
 const ALL_TAGS: ArticleTagName[] = ['新闻', '小说', '包含AI', '有删减', '无'];
 
-export function MetaForm() {
+export function MetaForm({ extra }: { extra?: React.ReactNode }) {
   const { form, setField, toggleTag, setArticleType } = useComposeStore();
   const { colors } = useTheme();
   const s = createStyles(colors);
@@ -196,6 +196,9 @@ export function MetaForm() {
           trackColor={{ false: colors.border, true: colors.accent }}
         />
       </View>
+
+      {/* 附加区块（如新闻发布页的新闻选项） */}
+      {extra}
 
       {/* 弹窗 */}
       <DatePickerModal

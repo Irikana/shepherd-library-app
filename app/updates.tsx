@@ -1,0 +1,192 @@
+// 更新与版本页：检查最新 Release、下载 APK、访问 SlyWrite 网站
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
+import { fetchLatestRelease, LATEST_APK_URL, SLYWRITE_SITE_URL, compareVersions, type ReleaseInfo } from '../src/lib/releases';
+import { useAuthStore } from '../src/store/auth-store';
+import { SPACING, useTheme, type Palette } from '../src/theme';
+
+const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  } catch {
+    return iso;
+  }
+}
+
+export default function UpdatesScreen() {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const s = createStyles(colors);
+  const [checking, setChecking] = useState(true);
+  const [release, setRelease] = useState<ReleaseInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const siteVersion = useAuthStore((st) => st.version);
+
+  const check = useCallback(async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      const r = await fetchLatestRelease();
+      setRelease(r);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    check();
+  }, [check]);
+
+  const openDownload = () => {
+    Linking.openURL(LATEST_APK_URL).catch(() => Alert.alert('无法打开下载链接', '请稍后重试或访问 SlyWrite 网站。'));
+  };
+
+  const openSite = () => {
+    Linking.openURL(SLYWRITE_SITE_URL).catch(() => Alert.alert('无法打开网站链接'));
+  };
+
+  const hasNewer = release ? compareVersions(release.tagName, APP_VERSION) > 0 : false;
+
+  return (
+    <ScrollView style={s.container} contentContainerStyle={s.content}>
+      {/* 当前版本 */}
+      <Text style={s.sectionTitle}>当前版本</Text>
+      <View style={s.box}>
+        <View style={s.row}>
+          <Text style={s.rowLabel}>软件版本</Text>
+          <Text style={s.rowValue}>v{APP_VERSION}</Text>
+        </View>
+        <View style={s.row}>
+          <Text style={s.rowLabel}>网站版本</Text>
+          <Text style={s.rowValue}>{siteVersion ?? '—'}</Text>
+        </View>
+      </View>
+
+      {/* 最新版本 */}
+      <Text style={s.sectionTitle}>最新版本</Text>
+      {checking ? (
+        <View style={[s.box, s.centerBox]}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={s.hint}>正在检查更新…</Text>
+        </View>
+      ) : error ? (
+        <View style={[s.box, s.centerBox]}>
+          <Text style={s.errorText}>{error}</Text>
+        </View>
+      ) : release ? (
+        <View style={s.box}>
+          <View style={s.row}>
+            <Text style={s.rowLabel}>最新版本</Text>
+            <Text style={[s.rowValue, hasNewer ? s.newerText : s.latestText]}>
+              {release.tagName}
+              {hasNewer ? '（有新版本）' : '（已是最新）'}
+            </Text>
+          </View>
+          <Text style={s.rowLabelSmall}>发布时间</Text>
+          <Text style={s.rowText}>{formatDate(release.publishedAt)}</Text>
+          {!!release.body && (
+            <>
+              <Text style={s.rowLabelSmall}>更新内容</Text>
+              <Text style={s.rowText}>{release.body.slice(0, 500)}</Text>
+            </>
+          )}
+          {hasNewer && (
+            <Pressable style={s.downloadBtn} onPress={openDownload}>
+              <Text style={s.downloadBtnText}>下载最新 APK</Text>
+            </Pressable>
+          )}
+        </View>
+      ) : (
+        <View style={[s.box, s.centerBox]}>
+          <Text style={s.hint}>暂无发布版本。构建完成后会自动发布，届时可在此检查更新。</Text>
+        </View>
+      )}
+
+      {/* 重新检查 */}
+      <Pressable style={s.refreshBtn} onPress={check} disabled={checking}>
+        <Text style={s.refreshText}>{checking ? '检查中…' : '重新检查'}</Text>
+      </Pressable>
+
+      {/* SlyWrite 网站 */}
+      <Text style={s.sectionTitle}>SlyWrite 网站</Text>
+      <View style={s.box}>
+        <Text style={s.rowText}>查看 SlyWrite 介绍、版本说明与下载：</Text>
+        <Pressable style={s.siteBtn} onPress={openSite}>
+          <Text style={s.siteBtnText}>访问 SlyWrite 网站</Text>
+        </Pressable>
+      </View>
+
+      <Pressable style={s.backBtn} onPress={() => router.back()}>
+        <Text style={s.backText}>返回</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const createStyles = (COLORS: Palette) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: COLORS.bgSubtle },
+    content: { padding: SPACING.md, paddingBottom: SPACING.xl },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: COLORS.textSecondary,
+      marginBottom: SPACING.sm,
+      marginTop: SPACING.sm,
+    },
+    box: {
+      backgroundColor: COLORS.bg,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    centerBox: { alignItems: 'center', paddingVertical: SPACING.lg },
+    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xs },
+    rowLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
+    rowValue: { fontSize: 15, color: COLORS.text, fontWeight: '700' },
+    rowLabelSmall: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.sm },
+    rowText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19, marginTop: 2 },
+    newerText: { color: COLORS.accent },
+    latestText: { color: COLORS.success },
+    hint: { fontSize: 13, color: COLORS.textLight, marginTop: SPACING.sm, lineHeight: 19 },
+    errorText: { fontSize: 13, color: COLORS.danger, lineHeight: 19 },
+    downloadBtn: {
+      backgroundColor: COLORS.accent,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      marginTop: SPACING.md,
+    },
+    downloadBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+    refreshBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      marginBottom: SPACING.lg,
+    },
+    refreshText: { color: COLORS.accent, fontWeight: '600', fontSize: 14 },
+    siteBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      marginTop: SPACING.sm,
+    },
+    siteBtnText: { color: COLORS.accent, fontWeight: '600', fontSize: 14 },
+    backBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      backgroundColor: COLORS.bg,
+    },
+    backText: { color: COLORS.textSecondary, fontSize: 14, fontWeight: '500' },
+  });

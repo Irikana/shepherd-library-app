@@ -82,11 +82,27 @@ export default function PreviewScreen() {
                 // library.html 同步失败不阻塞上传结果，仅提示
               }
 
+              // 同步英文版 library.html（用英文标题）
+              let enLibrarySynced = false;
+              try {
+                const { content, sha } = await getFile('en/library/library.html');
+                const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, titleEn, true);
+                if (updated !== content) {
+                  await putFile('en/library/library.html', updated, {
+                    sha,
+                    message: `Article list sync: ${titleEn} (mobile app)`,
+                  });
+                  enLibrarySynced = true;
+                }
+              } catch {
+                // 英文版同步失败不阻塞
+              }
+
               setUploadStatus('done', undefined, filePath);
               setUploading(false);
               Alert.alert(
                 '上传成功',
-                `文件：library/${filePath}\n\nlibrary.html 文章列表${librarySynced ? '已同步' : '同步失败（可手动添加）'}。\n\n约 1-2 分钟后可在网站查看。`,
+                `文件：library/${filePath}\n\nlibrary.html 文章列表${librarySynced ? '已同步' : '同步失败（可手动添加）'}；英文版${enLibrarySynced ? '已同步' : '同步失败（可手动添加）'}。\n\n约 1-2 分钟后可在网站查看。`,
                 [
                   {
                     text: '完成',

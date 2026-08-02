@@ -42,6 +42,23 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: shepherd-library-app-v0.0.3-release
+          name: shepherd-library-app-v0.0.4-release
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
+
+      - name: Read version
+        id: version
+        run: echo "ver=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.ver }}
+          name: SlyWrite ${{ steps.version.outputs.ver }}
+          body: |
+            牧羊人图书馆写作管理 App 发布。
+
+            - 安装包：app-release.apk（下方 Assets）
+            - 更新说明见 changelog/CHANGELOG-${{ steps.version.outputs.ver }}.md
+          files: android/app/build/outputs/apk/release/app-release.apk
+          fail_on_unmatched_files: true

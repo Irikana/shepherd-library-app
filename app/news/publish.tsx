@@ -1,21 +1,18 @@
-// 新闻发布页：撰写新闻文章（可带海报），上传并同步主页新闻区 / news.html / 英文主页 / library.html
+// 新闻发布页：完整元数据表单（性质/标签/脚注等）+ 正文分段编辑 + 可选海报
+// 发布时自动同步：文章页 / index.html 新闻区 / news.html / en/index.html / library.html / en/library/library.html
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
-  Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { MetaForm } from '../../src/components/MetaForm';
 import { MarkdownEditor } from '../../src/components/MarkdownEditor';
-import { DatePickerModal } from '../../src/components/DatePickerModal';
 import { useComposeStore } from '../../src/store/compose-store';
 import { useDraftsStore } from '../../src/store/drafts-store';
 import { getFile, putFile } from '../../src/lib/github-client';
@@ -27,21 +24,63 @@ import { insertIntoLibraryHtml, ARTICLE_CATEGORIES } from '../../src/lib/article
 import { SPACING, useTheme, type Palette } from '../../src/theme';
 
 type NewsKind = 'text' | 'poster';
+type Tab = 'meta' | 'body';
+
+/** 新闻专属选项：新闻形态 + 海报图片（原图上传，不压缩） */
+function NewsOptions({
+  kind,
+  setKind,
+  posterUri,
+  onPickPoster,
+}: {
+  kind: NewsKind;
+  setKind: (k: NewsKind) => void;
+  posterUri: string | null;
+  onPickPoster: () => void;
+}) {
+  const { colors } = useTheme();
+  const s = createStyles(colors);
+  return (
+    <>
+      <Text style={s.label}>新闻形态</Text>
+      <View style={s.chipRow}>
+        <Pressable style={[s.chip, kind === 'text' && s.chipActive]} onPress={() => setKind('text')}>
+          <Text style={[s.chipText, kind === 'text' && s.chipTextActive]}>文字新闻</Text>
+        </Pressable>
+        <Pressable style={[s.chip, kind === 'poster' && s.chipActive]} onPress={() => setKind('poster')}>
+          <Text style={[s.chipText, kind === 'poster' && s.chipTextActive]}>海报新闻</Text>
+        </Pressable>
+      </View>
+
+      {kind === 'poster' && (
+        <>
+          <Text style={s.label}>海报图片</Text>
+          {posterUri && (
+            <Image source={{ uri: posterUri }} style={s.posterPreview} resizeMode="contain" />
+          )}
+          <Pressable style={s.pickBtn} onPress={onPickPoster}>
+            <Text style={s.pickBtnText}>{posterUri ? '重新选择海报' : '选择海报图片'}</Text>
+          </Pressable>
+          <Text style={s.hint}>原图上传到 image/poster/，不压缩；建议使用宽 800px 以上的图片</Text>
+        </>
+      )}
+    </>
+  );
+}
 
 export default function NewsPublishScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const s = createStyles(colors);
   const { form, setField, draftId, startDraft } = useComposeStore();
+  const [tab, setTab] = useState<Tab>('meta');
   const [publishing, setPublishing] = useState(false);
-  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [kind, setKind] = useState<NewsKind>('text');
   const [posterUri, setPosterUri] = useState<string | null>(null);
   const [posterBase64, setPosterBase64] = useState<string | null>(null);
 
-  // 新闻发布强制信息文章性质；无草稿上下文时生成新草稿
+  // 无草稿上下文时生成新草稿（自动保存）
   useEffect(() => {
-    setField('articleType', '信息文章');
     if (!draftId) startDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -60,26 +99,26 @@ export default function NewsPublishScreen() {
     return () => clearTimeout(t);
   }, [form, draftId]);
 
+  /** 选择海报：原图直接读取 base64，不压缩 */
   const pickPoster = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.9,
+        mediaTypes: ['images'],
+        quality: 1,
+        base64: true,
       });
-      if (res.canceled || !res.assets?.length) return;
-      const uri = res.assets[0].uri;
-      // 压缩到宽 800 并输出 base64（GitHub Contents API 限制）
-      const processed = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 800 } }],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-      );
-      if (processed.base64) {
-        setPosterUri(processed.uri);
-        setPosterBase64(processed.base64);
+      if (res.canceled || !res.assets?.length) {
+        return; // 用户取消，不算失败
       }
-    } catch {
-      Alert.alert('选图失败', '无法读取所选图片，请重试');
+      const asset = res.assets[0];
+      if (!asset.base64) {
+        Alert.alert('选图失败', '未能读取所选图片的数据，请换一张图片重试。');
+        return;
+      }
+      setPosterUri(asset.uri);
+      setPosterBase64(asset.base64);
+    } catch (err) {
+      Alert.alert('选图失败', `无法读取所选图片，请重试。\n\n${(err as Error).message}`);
     }
   };
 
@@ -120,12 +159,12 @@ export default function NewsPublishScreen() {
     Alert.alert(
       '确认发布',
       `将执行以下操作：\n` +
-        `1. ${kind === 'poster' ? `上传海报 ${posterPath}` : ''}${kind === 'poster' ? '\n' : ''}` +
+        `${kind === 'poster' ? `1. 上传海报 ${posterPath}\n` : ''}` +
         `2. 上传文章 ${articlePath}\n` +
         `3. 更新主页新闻区 index.html\n` +
         `4. 更新 news.html\n` +
         `5. 更新英文主页 en/index.html\n` +
-        `6. 同步 library.html 普通文章列表`,
+        `6. 同步 library.html（中文与英文版）普通文章列表`,
       [
         { text: '取消', style: 'cancel' },
         {
@@ -139,7 +178,7 @@ export default function NewsPublishScreen() {
                   message: `新闻海报：${title}（移动端 App）`,
                   contentIsBase64: true,
                 });
-                steps.push(`海报已上传：image/${posterPath}`);
+                steps.push(`海报已上传：${posterPath}`);
               }
 
               await putFile(articlePath, html, { message: `发布新闻：${title}（移动端 App）` });
@@ -207,7 +246,7 @@ export default function NewsPublishScreen() {
                 steps.push('en/index.html 更新失败（可手动添加）');
               }
 
-              // library.html 普通文章列表
+              // library.html 普通文章列表（中文版）
               try {
                 const { content: libHtml, sha } = await getFile('library/library.html');
                 const updated = insertIntoLibraryHtml(
@@ -224,13 +263,31 @@ export default function NewsPublishScreen() {
                 steps.push('library.html 同步失败（可手动添加）');
               }
 
+              // library.html 普通文章列表（英文版）
+              try {
+                const { content: enLibHtml, sha } = await getFile('en/library/library.html');
+                const updated = insertIntoLibraryHtml(
+                  enLibHtml,
+                  ARTICLE_CATEGORIES.find((c) => c.key === 'normal')!,
+                  `${titleEn}.html`,
+                  titleEn,
+                  true,
+                );
+                if (updated !== enLibHtml) {
+                  await putFile('en/library/library.html', updated, { sha, message: `Article list sync: ${titleEn} (mobile app)` });
+                  steps.push('en/library/library.html 已同步');
+                }
+              } catch {
+                steps.push('en/library/library.html 同步失败（可手动添加）');
+              }
+
               setPublishing(false);
               const { draftId: did } = useComposeStore.getState();
               if (did) useDraftsStore.getState().remove(did);
               Alert.alert(
                 '发布完成',
                 steps.join('\n') + '\n\n约 1-2 分钟后网站生效。',
-                [{ text: '完成', onPress: () => { resetForm(); router.replace('/'); } }],
+                [{ text: '完成', onPress: () => { useComposeStore.getState().reset(); router.replace('/'); } }],
               );
             } catch (err) {
               setPublishing(false);
@@ -242,97 +299,35 @@ export default function NewsPublishScreen() {
     );
   };
 
-  const resetForm = () => {
-    useComposeStore.getState().reset();
-  };
-
   return (
     <View style={s.container}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.content}>
-        {/* 标题 */}
-        <Text style={s.label}>标题（中文）*</Text>
-        <TextInput
-          style={s.input}
-          value={form.title}
-          onChangeText={(v) => setField('title', v)}
-          placeholder="新闻标题"
-          placeholderTextColor={colors.textLight}
-        />
+      {/* 分段切换：元数据 / 正文 */}
+      <View style={s.tabs}>
+        <Pressable style={[s.tab, tab === 'meta' && s.tabActive]} onPress={() => setTab('meta')}>
+          <Text style={[s.tabText, tab === 'meta' && s.tabTextActive]}>元数据</Text>
+        </Pressable>
+        <Pressable style={[s.tab, tab === 'body' && s.tabActive]} onPress={() => setTab('body')}>
+          <Text style={[s.tabText, tab === 'body' && s.tabTextActive]}>正文</Text>
+        </Pressable>
+      </View>
 
-        <Text style={s.label}>英文标题 *</Text>
-        <TextInput
-          style={s.input}
-          value={form.titleEn}
-          onChangeText={(v) => setField('titleEn', v)}
-          placeholder="English title（作为文件名）"
-          placeholderTextColor={colors.textLight}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        {/* 发布日期 */}
-        <Text style={s.label}>发布日期 *</Text>
-        <View style={s.inputRow}>
-          <View style={[s.input, s.inputFlex, s.dateDisplay]}>
-            <Text style={form.createDate ? s.dateText : s.datePlaceholder}>
-              {form.createDate || 'YYYY-MM-DD'}
-            </Text>
-          </View>
-          <Pressable style={s.sideBtn} onPress={() => setDatePickerVisible(true)}>
-            <Text style={s.sideBtnText}>日历</Text>
-          </Pressable>
-        </View>
-
-        {/* 新闻形态 */}
-        <Text style={s.label}>新闻形态</Text>
-        <View style={s.chipRow}>
-          <Pressable
-            style={[s.chip, kind === 'text' && s.chipActive]}
-            onPress={() => setKind('text')}
-          >
-            <Text style={[s.chipText, kind === 'text' && s.chipTextActive]}>文字新闻</Text>
-          </Pressable>
-          <Pressable
-            style={[s.chip, kind === 'poster' && s.chipActive]}
-            onPress={() => setKind('poster')}
-          >
-            <Text style={[s.chipText, kind === 'poster' && s.chipTextActive]}>海报新闻</Text>
-          </Pressable>
-        </View>
-
-        {/* 海报选择 */}
-        {kind === 'poster' && (
-          <>
-            <Text style={s.label}>海报图片</Text>
-            {posterUri && (
-              <Image source={{ uri: posterUri }} style={s.posterPreview} resizeMode="contain" />
-            )}
-            <Pressable style={s.pickBtn} onPress={pickPoster}>
-              <Text style={s.pickBtnText}>{posterUri ? '重新选择海报' : '选择海报图片'}</Text>
-            </Pressable>
-            <Text style={s.hint}>图片将压缩至宽 800px 后上传到 image/poster/</Text>
-          </>
-        )}
-
-        {/* 正文 */}
-        <Text style={s.label}>正文 *</Text>
-        <View style={s.editorBox}>
-          <MarkdownEditor />
-        </View>
-
-        {/* MathJax 开关 */}
-        <View style={s.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.label}>含数学公式</Text>
-            <Text style={s.hint}>开启后注入 MathJax 3 渲染脚本</Text>
-          </View>
-          <Switch
-            value={form.includeMathJax}
-            onValueChange={(v) => setField('includeMathJax', v)}
-            trackColor={{ false: colors.border, true: colors.accent }}
+      {/* 内容 */}
+      <View style={s.content}>
+        {tab === 'meta' ? (
+          <MetaForm
+            extra={
+              <NewsOptions
+                kind={kind}
+                setKind={setKind}
+                posterUri={posterUri}
+                onPickPoster={pickPoster}
+              />
+            }
           />
-        </View>
-      </ScrollView>
+        ) : (
+          <MarkdownEditor />
+        )}
+      </View>
 
       {/* 底部发布按钮 */}
       <View style={s.footer}>
@@ -340,16 +335,6 @@ export default function NewsPublishScreen() {
           <Text style={s.publishBtnText}>{publishing ? '发布中…' : '发布新闻'}</Text>
         </Pressable>
       </View>
-
-      <DatePickerModal
-        visible={datePickerVisible}
-        value={form.createDate}
-        onConfirm={(date) => {
-          setField('createDate', date);
-          setDatePickerVisible(false);
-        }}
-        onCancel={() => setDatePickerVisible(false)}
-      />
     </View>
   );
 }
@@ -357,7 +342,12 @@ export default function NewsPublishScreen() {
 const createStyles = (COLORS: Palette) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.bg },
-    content: { padding: SPACING.md, paddingBottom: SPACING.xl },
+    tabs: { flexDirection: 'row', borderBottomWidth: 1, borderColor: COLORS.border },
+    tab: { flex: 1, paddingVertical: SPACING.sm + 2, alignItems: 'center', backgroundColor: COLORS.bgSubtle },
+    tabActive: { backgroundColor: COLORS.bg, borderBottomWidth: 2, borderBottomColor: COLORS.accent },
+    tabText: { fontSize: 15, color: COLORS.textSecondary },
+    tabTextActive: { color: COLORS.accent, fontWeight: '600' },
+    content: { flex: 1 },
     label: {
       fontSize: 14,
       fontWeight: '600',
@@ -366,29 +356,6 @@ const createStyles = (COLORS: Palette) =>
       marginBottom: SPACING.xs,
     },
     hint: { fontSize: 12, color: COLORS.textLight, marginTop: 4, lineHeight: 17 },
-    input: {
-      borderWidth: 1,
-      borderColor: COLORS.border,
-      padding: SPACING.sm + 2,
-      fontSize: 15,
-      color: COLORS.text,
-      backgroundColor: COLORS.bg,
-    },
-    inputFlex: { flex: 1 },
-    inputRow: { flexDirection: 'row', alignItems: 'stretch' },
-    dateDisplay: { justifyContent: 'center' },
-    dateText: { fontSize: 15, color: COLORS.text },
-    datePlaceholder: { fontSize: 15, color: COLORS.textLight },
-    sideBtn: {
-      borderWidth: 1,
-      borderLeftWidth: 0,
-      borderColor: COLORS.border,
-      paddingHorizontal: SPACING.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: COLORS.bgMuted,
-    },
-    sideBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
     chip: {
       borderWidth: 1,
@@ -416,8 +383,6 @@ const createStyles = (COLORS: Palette) =>
       backgroundColor: COLORS.bgSubtle,
     },
     pickBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '600' },
-    editorBox: { height: 320, borderWidth: 1, borderColor: COLORS.border },
-    switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md },
     footer: {
       borderTopWidth: 1,
       borderColor: COLORS.border,
