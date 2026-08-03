@@ -190,6 +190,19 @@ export function EditMetaForm() {
         />
       </View>
 
+      {/* 隐藏文章（不在 library.html 公开列表与新闻板块展示，仅可通过搜索找到） */}
+      <View style={s.switchRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.label}>隐藏文章</Text>
+          <Text style={s.hint}>隐藏后不在 library.html 公开列表与新闻板块展示，仍可站内搜索</Text>
+        </View>
+        <Switch
+          value={metadata.hidden}
+          onValueChange={(v) => setMetadata('hidden', v)}
+          trackColor={{ false: colors.border, true: colors.accent }}
+        />
+      </View>
+
       {/* 弹窗 */}
       <DatePickerModal
         visible={datePickerVisible}

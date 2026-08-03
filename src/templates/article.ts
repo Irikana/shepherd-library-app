@@ -205,6 +205,14 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
         </div>`,
   ];
 
+  // hidden 标记（供编辑时读取，不展示给用户）
+  if (data.hidden) {
+    metaItems.push(`      <div class="article-meta-item" style="display:none" data-article-hidden="true">
+          <span class="article-meta-label">隐藏状态：</span>
+          <span class="article-meta-value">是</span>
+        </div>`);
+  }
+
   // 录音文章追加录音时长
   if (data.articleType === '录音文章' && data.recordingDuration) {
     metaItems.push(`      <div class="article-meta-item">

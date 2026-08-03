@@ -1,9 +1,14 @@
-// 更新与版本页：检查最新 Release、下载 APK、访问 SlyWrite 网站
+// 更新与版本页：检查 App 最新 Release、下载 APK、显示网站版本、访问 SlyWrite 网站
+// 从 App 仓库（shepherd-library-app）检查 App 更新与下载 APK；
+// 从网站仓库（Irikana.github.io）显示牧羊人图书馆网站版本
+// 下载：直接用 Linking 跳转浏览器下载（GitHub Release asset 自动触发下载），
+// 用户下载完成后按系统提示安装
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { fetchLatestRelease, LATEST_APK_URL, SLYWRITE_SITE_URL, compareVersions, type ReleaseInfo } from '../src/lib/releases';
+import { fetchAppRelease, fetchSiteRelease, LATEST_APK_URL, SLYWRITE_SITE_URL, compareVersions, type ReleaseInfo } from '../src/lib/releases';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
@@ -21,36 +26,98 @@ export default function UpdatesScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const s = createStyles(colors);
-  const [checking, setChecking] = useState(true);
-  const [release, setRelease] = useState<ReleaseInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const check = useCallback(async () => {
-    setChecking(true);
-    setError(null);
+  // App 版本检查
+  const [appChecking, setAppChecking] = useState(true);
+  const [appRelease, setAppRelease] = useState<ReleaseInfo | null>(null);
+  const [appError, setAppError] = useState<string | null>(null);
+
+  // 网站版本
+  const [siteChecking, setSiteChecking] = useState(true);
+  const [siteRelease, setSiteRelease] = useState<ReleaseInfo | null>(null);
+  const [siteError, setSiteError] = useState<string | null>(null);
+
+  // 下载状态
+  const [downloading, setDownloading] = useState(false);
+
+  const checkApp = useCallback(async () => {
+    setAppChecking(true);
+    setAppError(null);
     try {
-      const r = await fetchLatestRelease();
-      setRelease(r);
+      const r = await fetchAppRelease();
+      setAppRelease(r);
     } catch (err) {
-      setError((err as Error).message);
+      setAppError((err as Error).message);
     } finally {
-      setChecking(false);
+      setAppChecking(false);
+    }
+  }, []);
+
+  const checkSite = useCallback(async () => {
+    setSiteChecking(true);
+    setSiteError(null);
+    try {
+      const r = await fetchSiteRelease();
+      setSiteRelease(r);
+    } catch (err) {
+      setSiteError((err as Error).message);
+    } finally {
+      setSiteChecking(false);
     }
   }, []);
 
   useEffect(() => {
-    check();
-  }, [check]);
+    checkApp();
+    checkSite();
+  }, [checkApp, checkSite]);
+
+  /** 在 App 内直接下载 APK，完成后通过系统 Intent 自动弹出安装界面（Android） */
+  const downloadApk = async () => {
+    try {
+      setDownloading(true);
+      const url = LATEST_APK_URL;
+      const fileUri = `${FileSystem.cacheDirectory}app-release.apk`;
+
+      // 清理已有文件
+      const existing = await FileSystem.getInfoAsync(fileUri);
+      if (existing.exists) {
+        await FileSystem.deleteAsync(fileUri);
+      }
+
+      // 下载
+      const download = FileSystem.createDownloadResumable(url, fileUri);
+      const result = await download.downloadAsync();
+      if (!result || !result.uri) throw new Error('下载失败');
+
+      // 获取 content:// URI（通过 Android FileProvider）
+      const contentUri = await FileSystem.getContentUriAsync(result.uri);
+
+      // 打开系统安装界面（Android 自动识别 APK content URI）
+      await Linking.openURL(contentUri);
+    } catch (err) {
+      // 兜底：跳转浏览器下载
+      Alert.alert('自动安装失败', '将打开浏览器下载，下载完成后请手动点击通知安装。');
+      Linking.openURL(LATEST_APK_URL).catch(() =>
+        Alert.alert('无法下载', '请稍后重试或访问 SlyWrite 网站。'),
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const openDownload = () => {
-    Linking.openURL(LATEST_APK_URL).catch(() => Alert.alert('无法打开下载链接', '请稍后重试或访问 SlyWrite 网站。'));
+    if (downloading) return;
+    downloadApk();
   };
 
   const openSite = () => {
     Linking.openURL(SLYWRITE_SITE_URL).catch(() => Alert.alert('无法打开网站链接'));
   };
 
-  const hasNewer = release ? compareVersions(release.tagName, APP_VERSION) > 0 : false;
+  const hasNewer = appRelease ? compareVersions(appRelease.tagName, APP_VERSION) > 0 : false;
+
+  // 网站版本格式化（网站 Release tag 可能是 alpha 格式，直接显示）
+  const siteVersionStr = siteRelease ? siteRelease.tagName : (siteChecking ? '…' : '—');
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
@@ -63,40 +130,46 @@ export default function UpdatesScreen() {
         </View>
       </View>
 
-      {/* 最新版本（App 自身 Release） */}
+      {/* App 最新版本（来自 shepherd-library-app 仓库） */}
       <Text style={s.sectionTitle}>App 最新版本</Text>
-      {checking ? (
+      {appChecking ? (
         <View style={[s.box, s.centerBox]}>
           <ActivityIndicator color={colors.accent} />
           <Text style={s.hint}>正在检查更新…</Text>
         </View>
-      ) : error ? (
+      ) : appError ? (
         <View style={[s.box, s.centerBox]}>
-          <Text style={s.errorText}>{error}</Text>
-          <Pressable style={[s.refreshBtn, s.retryBtn]} onPress={check} disabled={checking}>
+          <Text style={s.errorText}>{appError}</Text>
+          <Pressable style={[s.refreshBtn, s.retryBtn]} onPress={checkApp} disabled={appChecking}>
             <Text style={s.refreshText}>重试</Text>
           </Pressable>
         </View>
-      ) : release ? (
+      ) : appRelease ? (
         <View style={s.box}>
           <View style={s.row}>
             <Text style={s.rowLabel}>最新版本</Text>
             <Text style={[s.rowValue, hasNewer ? s.newerText : s.latestText]}>
-              {release.tagName}
+              {appRelease.tagName}
               {hasNewer ? '（有新版本）' : '（已是最新）'}
             </Text>
           </View>
           <Text style={s.rowLabelSmall}>发布时间</Text>
-          <Text style={s.rowText}>{formatDate(release.publishedAt)}</Text>
-          {!!release.body && (
+          <Text style={s.rowText}>{formatDate(appRelease.publishedAt)}</Text>
+          {!!appRelease.body && (
             <>
               <Text style={s.rowLabelSmall}>更新内容</Text>
-              <Text style={s.rowText}>{release.body.slice(0, 500)}</Text>
+              <Text style={s.rowText}>{appRelease.body.slice(0, 500)}</Text>
             </>
           )}
-          {/* 始终显示下载按钮（可重装当前版本，不限于有新版本时） */}
-          <Pressable style={s.downloadBtn} onPress={openDownload}>
-            <Text style={s.downloadBtnText}>下载 APK（{release.tagName}）</Text>
+          {/* 下载/安装按钮 */}
+          <Pressable
+            style={[s.downloadBtn, downloading && s.btnDisabled]}
+            onPress={openDownload}
+            disabled={downloading}
+          >
+            <Text style={s.downloadBtnText}>
+              {downloading ? '下载中…' : `下载并安装 APK（${appRelease.tagName}）`}
+            </Text>
           </Pressable>
         </View>
       ) : (
@@ -108,10 +181,26 @@ export default function UpdatesScreen() {
         </View>
       )}
 
-      {/* 重新检查 */}
-      <Pressable style={s.refreshBtn} onPress={check} disabled={checking}>
-        <Text style={s.refreshText}>{checking ? '检查中…' : '重新检查'}</Text>
+      {/* 重新检查 App 更新 */}
+      <Pressable style={s.refreshBtn} onPress={checkApp} disabled={appChecking}>
+        <Text style={s.refreshText}>{appChecking ? '检查中…' : '重新检查'}</Text>
       </Pressable>
+
+      {/* 牧羊人图书馆网站版本 */}
+      <Text style={s.sectionTitle}>牧羊人图书馆网站</Text>
+      <View style={s.box}>
+        <View style={s.row}>
+          <Text style={s.rowLabel}>网站版本</Text>
+          <Text style={s.rowValue}>{siteVersionStr}</Text>
+        </View>
+        {siteRelease && (
+          <>
+            <Text style={s.rowLabelSmall}>发布时间</Text>
+            <Text style={s.rowText}>{formatDate(siteRelease.publishedAt)}</Text>
+          </>
+        )}
+        <Text style={s.hint}>「网站版本」是牧羊人图书馆网站（irikana.github.io）的版本号，与 App 更新无关</Text>
+      </View>
 
       {/* SlyWrite 网站 */}
       <Text style={s.sectionTitle}>SlyWrite 网站</Text>
@@ -155,7 +244,7 @@ const createStyles = (COLORS: Palette) =>
     rowText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19, marginTop: 2 },
     newerText: { color: COLORS.accent },
     latestText: { color: COLORS.success },
-    hint: { fontSize: 13, color: COLORS.textLight, marginTop: SPACING.sm, lineHeight: 19 },
+    hint: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.sm, lineHeight: 17 },
     errorText: { fontSize: 13, color: COLORS.danger, lineHeight: 19 },
     downloadBtn: {
       backgroundColor: COLORS.accent,
@@ -164,6 +253,7 @@ const createStyles = (COLORS: Palette) =>
       marginTop: SPACING.md,
     },
     downloadBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+    btnDisabled: { opacity: 0.5 },
     refreshBtn: {
       borderWidth: 1,
       borderColor: COLORS.accent,

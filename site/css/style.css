@@ -216,18 +216,6 @@ img {
 
 /* ========== Layout System ========== */
 
-.gjs-row {
-  display: flex;
-  flex-wrap: wrap;
-  width: 100%;
-  gap: 0;
-}
-
-.gjs-cell {
-  flex: 1;
-  min-width: 0;
-}
-
 .content-row {
   background-color: var(--color-bg);
   padding: var(--space-xl) var(--space-md);
@@ -1648,17 +1636,6 @@ strong {
 /* ========== Responsive Design ========== */
 
 @media (max-width: 768px) {
-  .gjs-row {
-    flex-direction: column;
-    padding: var(--space-sm);
-    gap: var(--space-sm);
-  }
-
-  .gjs-cell {
-    width: 100% !important;
-    flex: 0 0 100%;
-  }
-
   .content-width-limiter {
     width: 100%;
     max-width: 100%;
@@ -2102,10 +2079,6 @@ strong {
 }
 
 @media (max-width: 375px) {
-  .gjs-row {
-    padding: var(--space-sm);
-  }
-
   .main-container {
     padding: var(--space-md) var(--space-sm);
   }
@@ -2147,10 +2120,6 @@ strong {
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
-  .gjs-row {
-    padding: var(--space-md) var(--space-lg);
-  }
-
   .quick-nav {
     width: 32px;
     padding: var(--space-md) var(--space-xs);

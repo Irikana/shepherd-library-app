@@ -2,7 +2,9 @@
 // 公开仓库无需 Token，但已登录时带上 Token 可显著提升速率限制（未认证 60 次/时，易触发 403）
 // 取版本方式：拉取 releases 列表，按版本号比较取最大（而非依赖 /releases/latest 的返回顺序，
 // 避免历史归档 release 因发布时间较晚而抢占"最新"）
-import { GITHUB_API, REPO_CONFIG } from './config';
+// 两个来源：App 仓库（shepherd-library-app）用于 App 更新/APK 下载；
+// 网站仓库（Irikana.github.io）用于显示牧羊人图书馆网站版本
+import { APP_REPO_CONFIG, GITHUB_API, REPO_CONFIG } from './config';
 import { getToken } from './auth';
 
 export interface ReleaseAsset {
@@ -19,10 +21,8 @@ export interface ReleaseInfo {
   assets: ReleaseAsset[];
 }
 
-export const LATEST_RELEASE_URL = `${GITHUB_API}/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases/latest`;
-
-/** 直接下载最新 APK 的固定链接（GitHub 会自动跳转到最新 release 的该 asset） */
-export const LATEST_APK_URL = `https://github.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases/latest/download/app-release.apk`;
+/** 直接下载 App 最新 APK 的固定链接 */
+export const LATEST_APK_URL = `https://github.com/${APP_REPO_CONFIG.owner}/${APP_REPO_CONFIG.repo}/releases/latest/download/app-release.apk`;
 
 /** SlyWrite 官网（已迁移至 app 项目 GitHub Pages） */
 export const SLYWRITE_SITE_URL = 'https://irikana.github.io/shepherd-library-app/';
@@ -51,8 +51,8 @@ function mapRelease(data: RawRelease): ReleaseInfo {
   };
 }
 
-/** 获取最新 release；仓库无 release 时返回 null */
-export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
+/** 获取指定仓库的最新 release；仓库无 release 时返回 null */
+async function fetchRepoRelease(owner: string, repo: string): Promise<ReleaseInfo | null> {
   const token = await getToken();
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
@@ -61,7 +61,7 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 
   // 方式一：列表接口 → 过滤 draft → 按版本号取最大（最稳妥）
   const listRes = await fetch(
-    `${GITHUB_API}/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases?per_page=10`,
+    `${GITHUB_API}/repos/${owner}/${repo}/releases?per_page=10`,
     { headers },
   );
   if (listRes.ok) {
@@ -75,10 +75,23 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
   if (listRes.status === 404) return null;
 
   // 方式二：latest 端点兜底（列表接口异常时）
-  const res = await fetch(LATEST_RELEASE_URL, { headers });
+  const res = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/releases/latest`,
+    { headers },
+  );
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`获取更新失败（HTTP ${res.status}）`);
   return mapRelease((await res.json()) as RawRelease);
+}
+
+/** 获取 App 仓库（shepherd-library-app）的最新 Release — 用于 App 版本更新与 APK 下载 */
+export async function fetchAppRelease(): Promise<ReleaseInfo | null> {
+  return fetchRepoRelease(APP_REPO_CONFIG.owner, APP_REPO_CONFIG.repo);
+}
+
+/** 获取牧羊人图书馆网站（Irikana.github.io）的最新 Release — 用于显示网站版本 */
+export async function fetchSiteRelease(): Promise<ReleaseInfo | null> {
+  return fetchRepoRelease(REPO_CONFIG.owner, REPO_CONFIG.repo);
 }
 
 /** 简单版本比较：v0.0.4 > v0.0.3 */

@@ -6,6 +6,13 @@ export const REPO_CONFIG = {
   branch: 'main',
 } as const;
 
+/** App 自身仓库（用于检查 App 更新/下载 APK） */
+export const APP_REPO_CONFIG = {
+  owner: 'Irikana',
+  repo: 'shepherd-library-app',
+  branch: 'main',
+} as const;
+
 export const GITHUB_API = 'https://api.github.com';
 
 export const SITE_BASE_URL = 'https://irikana.github.io';

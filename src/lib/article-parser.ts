@@ -106,6 +106,9 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
   // 是否新闻：检查标签中是否有「新闻」
   const isNews = tags.includes('新闻');
 
+  // 隐藏状态：从 data-article-hidden 属性读取（编辑已有文章时使用）
+  const hidden = html.includes('data-article-hidden="true"');
+
   // 英文标题：从文件名提取
   const fileName = filePath.split('/').pop() || '';
   const titleEn = fileName.replace(/\.html?$/, '');
@@ -124,7 +127,7 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
     includeMathJax,
     category,
     isNews,
-    hidden: false,
+    hidden,
   };
 }
 
@@ -312,6 +315,25 @@ export function updateArticleHtml(html: string, form: ArticleFormData): string {
     result = result.replace('</head>', `${FOOTNOTE_STYLE}\n</head>`);
   } else if (!needsFootnoteStyle && hasFootnoteStyle) {
     result = result.replace(/\n?<style>\s*\.article-footnote-ref[\s\S]*?<\/style>/, '');
+  }
+
+  // 7. 同步 hidden 标记（编辑已有文章时：添加或移除 data-article-hidden 标记）
+  const hasHidden = result.includes('data-article-hidden="true"');
+  if (form.hidden && !hasHidden) {
+    // 添加 hidden 标记到 article-meta 区段内
+    result = result.replace(
+      '<div class="article-meta">',
+      `<div class="article-meta">\n      <div class="article-meta-item" style="display:none" data-article-hidden="true">
+          <span class="article-meta-label">隐藏状态：</span>
+          <span class="article-meta-value">是</span>
+        </div>`,
+    );
+  } else if (!form.hidden && hasHidden) {
+    // 移除 hidden 标记行
+    result = result.replace(
+      /\n\s*<div class="article-meta-item" style="display:none" data-article-hidden="true">[\s\S]*?<\/div>/,
+      '',
+    );
   }
 
   return result;
