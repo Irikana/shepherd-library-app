@@ -14,6 +14,10 @@ import {
 import { FONT, SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
 
+// 滚动修复说明：
+// TextInput multiline + flex:1 自行管理滚动（Android 嵌套 ScrollView 会导致滚动失效）
+// scrollPosition / onScroll 接口保留兼容（父组件传入时不报错），但不再实际追踪
+
 interface InsertAction {
   label: string;
   insert: (before: string, selStart: number, selEnd: number) => { text: string; cursor: number };
@@ -209,28 +213,10 @@ export function MarkdownEditor({
   const s = createStyles(colors);
   const inputRef = React.useRef<TextInput>(null);
   const selectionRef = React.useRef({ start: 0, end: 0 });
-  const scrollRef = React.useRef<ScrollView>(null);
-  const restoredRef = React.useRef(false);
   const [symbolsVisible, setSymbolsVisible] = useState(false);
-  // 正文高度随内容增长：让外层 ScrollView 真正可滚动（修复 Android 嵌套滚动失效）
-  const [inputHeight, setInputHeight] = useState(240);
 
   // 锁定状态下只读（防误触）
   const lockedBody = locked.body;
-
-  // 恢复上次浏览位置（仅首次挂载时应用一次，避免与用户滚动互相覆盖）
-  const onLayout = () => {
-    if (!restoredRef.current && scrollPosition && scrollPosition > 0) {
-      restoredRef.current = true;
-      requestAnimationFrame(() => {
-        scrollRef.current?.scrollTo({ y: scrollPosition, animated: false });
-      });
-    }
-  };
-
-  const handleScroll = (e: { nativeEvent: { contentOffset: { y: number } } }) => {
-    onScroll?.(e.nativeEvent.contentOffset.y);
-  };
 
   /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
   const applyInsert = (text: string, cursor: number) => {
@@ -310,37 +296,27 @@ export function MarkdownEditor({
           </Pressable>
         </ScrollView>
       </View>
-      {/* 正文区域：独立 ScrollView，可记录/恢复滚动位置 */}
-      <ScrollView
-        ref={scrollRef}
-        style={s.scrollArea}
-        onLayout={onLayout}
-        onScroll={handleScroll}
-        scrollEventThrottle={64}
-        keyboardShouldPersistTaps="handled"
-      >
-        <TextInput
-          ref={inputRef}
-          style={[s.editor, { height: inputHeight }]}
-          value={form.bodyMarkdown}
-          onChangeText={(v) => setField('bodyMarkdown', v)}
-          onContentSizeChange={(e) => setInputHeight(Math.max(240, e.nativeEvent.contentSize.height))}
-          onSelectionChange={(e) => {
-            selectionRef.current = {
-              start: e.nativeEvent.selection.start,
-              end: e.nativeEvent.selection.end,
-            };
-          }}
-          placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
-          placeholderTextColor={colors.textLight}
-          multiline
-          textAlignVertical="top"
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!lockedBody}
-          showSoftInputOnFocus={!lockedBody}
-        />
-      </ScrollView>
+      {/* 正文区域：TextInput multiline 自行管理滚动（不嵌套 ScrollView） */}
+      <TextInput
+        ref={inputRef}
+        style={s.editor}
+        value={form.bodyMarkdown}
+        onChangeText={(v) => setField('bodyMarkdown', v)}
+        onSelectionChange={(e) => {
+          selectionRef.current = {
+            start: e.nativeEvent.selection.start,
+            end: e.nativeEvent.selection.end,
+          };
+        }}
+        placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
+        placeholderTextColor={colors.textLight}
+        multiline
+        textAlignVertical="top"
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!lockedBody}
+        showSoftInputOnFocus={!lockedBody}
+      />
       <Text style={s.counter}>{form.bodyMarkdown.length} 字</Text>
 
       {/* 数学符号面板 */}
@@ -408,6 +384,7 @@ const createStyles = (COLORS: Palette) =>
     toolText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
     scrollArea: { flex: 1 },
     editor: {
+      flex: 1,
       padding: SPACING.md,
       fontSize: FONT.size,
       fontFamily: FONT.mono,

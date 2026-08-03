@@ -1,11 +1,12 @@
 // 文本文件编辑器：查看/编辑/保存仓库中的文本文件，支持新建文件
-import React, { useEffect, useRef, useState } from 'react';
+// 文章 HTML 文件自动检测并提供元数据表单编辑（标签页切换：元数据 / 源码）
+// 滚动修复：移除 ScrollView 包裹，TextInput multiline + flex:1 自行管理滚动
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,6 +15,8 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { putFile, getFile } from '../src/lib/github-client';
 import { useEditorStore } from '../src/store/editor-store';
+import { updateArticleHtml } from '../src/lib/article-parser';
+import { EditMetaForm } from '../src/components/EditMetaForm';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 
 /** 新建文件时允许的根目录（安全白名单，防止写入仓库任意位置） */
@@ -27,6 +30,8 @@ const NEW_FILE_ROOTS = [
 /** 文件名非法字符（Windows/仓库路径安全） */
 const INVALID_PATH_CHARS = /[\\/\u0000-\u001f<>:"|?*]|\.\./;
 
+type Tab = 'meta' | 'source';
+
 export default function EditorScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ path?: string; name?: string }>();
@@ -39,6 +44,9 @@ export default function EditorScreen() {
     sha,
     isNew,
     dirty,
+    isArticle,
+    metadata,
+    metadataDirty,
     load,
     loadNew,
     setContent,
@@ -47,7 +55,7 @@ export default function EditorScreen() {
   const [saving, setSaving] = useState(false);
   const [newDir, setNewDir] = useState(NEW_FILE_ROOTS[0].value);
   const [newFileName, setNewFileName] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  const [tab, setTab] = useState<Tab>('meta');
 
   // 从文件浏览器进入：读取 store 中已加载的内容（browser.tsx 中先加载再跳转）
   useEffect(() => {
@@ -83,9 +91,18 @@ export default function EditorScreen() {
       Alert.alert('路径无效', '无法确定保存路径，请返回重新新建。');
       return;
     }
+
+    // 合并元数据变更到 HTML（如果是文章且元数据有修改）
+    let saveContent = content;
+    if (isArticle && metadataDirty && metadata) {
+      saveContent = updateArticleHtml(content, metadata);
+      // 同步回 store（让 markSaved 正确记录）
+      setContent(saveContent);
+    }
+
     setSaving(true);
     try {
-      await putFile(targetPath, content, {
+      await putFile(targetPath, saveContent, {
         sha: isNew ? undefined : (sha ?? undefined),
         message: isNew ? `新建文件：${targetPath}（移动端 App）` : `编辑文件：${targetPath}（移动端 App）`,
       });
@@ -103,7 +120,7 @@ export default function EditorScreen() {
   };
 
   const handleBack = () => {
-    if (dirty) {
+    if (dirty || metadataDirty) {
       Alert.alert('放弃修改？', '当前文件有未保存的修改，返回将丢失。', [
         { text: '继续编辑', style: 'cancel' },
         { text: '放弃', style: 'destructive', onPress: () => router.back() },
@@ -112,6 +129,8 @@ export default function EditorScreen() {
     }
     router.back();
   };
+
+  const hasChanges = dirty || metadataDirty || isNew;
 
   return (
     <KeyboardAvoidingView
@@ -124,9 +143,27 @@ export default function EditorScreen() {
           {isNew ? '新建文件' : name || path}
         </Text>
         <Text style={s.statusText}>
-          {isNew ? '新建模式' : dirty ? '已修改' : '已保存'}
+          {isNew ? '新建模式' : dirty || metadataDirty ? '已修改' : '已保存'}
         </Text>
       </View>
+
+      {/* 文章元数据/源码切换标签 */}
+      {isArticle && !isNew && (
+        <View style={s.tabs}>
+          <Pressable
+            style={[s.tab, tab === 'meta' && s.tabActive]}
+            onPress={() => setTab('meta')}
+          >
+            <Text style={[s.tabText, tab === 'meta' && s.tabTextActive]}>元数据</Text>
+          </Pressable>
+          <Pressable
+            style={[s.tab, tab === 'source' && s.tabActive]}
+            onPress={() => setTab('source')}
+          >
+            <Text style={[s.tabText, tab === 'source' && s.tabTextActive]}>源码</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* 新建文件：选择目录 + 文件名 */}
       {isNew && (
@@ -156,10 +193,13 @@ export default function EditorScreen() {
         </View>
       )}
 
-      {/* 编辑器 */}
-      <ScrollView style={s.editorScroll} keyboardShouldPersistTaps="handled">
+      {/* 编辑器主体 */}
+      {isArticle && !isNew && tab === 'meta' ? (
+        <View style={s.editorArea}>
+          <EditMetaForm />
+        </View>
+      ) : (
         <TextInput
-          ref={inputRef}
           style={s.editor}
           value={content}
           onChangeText={setContent}
@@ -171,7 +211,7 @@ export default function EditorScreen() {
           autoCorrect={false}
           autoFocus={isNew}
         />
-      </ScrollView>
+      )}
 
       {/* 底部操作 */}
       <View style={s.footer}>
@@ -179,9 +219,9 @@ export default function EditorScreen() {
           <Text style={s.backText}>返回</Text>
         </Pressable>
         <Pressable
-          style={[s.saveBtn, (saving || (!dirty && !isNew)) && s.btnDisabled]}
+          style={[s.saveBtn, (saving || !hasChanges) && s.btnDisabled]}
           onPress={handleSave}
-          disabled={saving || (!dirty && !isNew)}
+          disabled={saving || !hasChanges}
         >
           <Text style={s.saveBtnText}>{saving ? '保存中…' : isNew ? '创建文件' : '保存'}</Text>
         </Pressable>
@@ -204,6 +244,20 @@ const createStyles = (COLORS: Palette) =>
     },
     pathText: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text, marginRight: SPACING.sm },
     statusText: { fontSize: 12, color: COLORS.textLight },
+    tabs: { flexDirection: 'row', borderBottomWidth: 1, borderColor: COLORS.border },
+    tab: {
+      flex: 1,
+      paddingVertical: SPACING.sm + 2,
+      alignItems: 'center',
+      backgroundColor: COLORS.bgSubtle,
+    },
+    tabActive: {
+      backgroundColor: COLORS.bg,
+      borderBottomWidth: 2,
+      borderBottomColor: COLORS.accent,
+    },
+    tabText: { fontSize: 15, color: COLORS.textSecondary },
+    tabTextActive: { color: COLORS.accent, fontWeight: '600' },
     newBox: {
       padding: SPACING.md,
       borderBottomWidth: 1,
@@ -230,9 +284,9 @@ const createStyles = (COLORS: Palette) =>
       color: COLORS.text,
       backgroundColor: COLORS.bg,
     },
-    editorScroll: { flex: 1 },
+    editorArea: { flex: 1 },
     editor: {
-      flexGrow: 1,
+      flex: 1,
       padding: SPACING.md,
       fontSize: 14,
       lineHeight: 21,
@@ -240,7 +294,6 @@ const createStyles = (COLORS: Palette) =>
       color: COLORS.text,
       backgroundColor: COLORS.bg,
       textAlignVertical: 'top',
-      minHeight: 200,
     },
     footer: {
       flexDirection: 'row',
