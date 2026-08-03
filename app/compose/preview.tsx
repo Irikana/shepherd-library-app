@@ -76,13 +76,13 @@ export default function PreviewScreen() {
       return;
     }
 
-    const filePath = `${category.dir}/${titleEn}.html`;
+    const filePath = `library/${category.dir}/${titleEn}.html`;
     const posterPath = form.isNews && newsKind === 'poster' && posterBase64
       ? `image/poster/${titleEn}.png`
       : null;
 
     const confirmMsg = form.hidden
-      ? `分类：${category.label}（隐藏）\n将创建/更新文件：\nlibrary/${filePath}\n\n隐藏文章：不显示在 library.html 列表与新闻，仅加入站内搜索数据。`
+      ? `分类：${category.label}（隐藏）\n将创建/更新文件：\n${filePath}\n\n隐藏文章：不显示在 library.html 列表与新闻，仅加入站内搜索数据。`
       : form.isNews
         ? `分类：${category.label}\n（在新闻板块展示：${newsKind === 'poster' ? '海报新闻' : '文字新闻'}）\n\n将执行：\n${posterPath ? `1. 上传海报 ${posterPath}\n` : ''}2. 上传文章 ${filePath}\n3. 更新主页新闻区 index.html\n4. 更新 news.html\n5. 更新英文主页 en/index.html\n6. 同步 library.html 文章列表`
         : `分类：${category.label}\n将创建/更新文件：\n${filePath}\n\n并同步更新 library.html 文章列表与站内搜索数据。`;
@@ -110,7 +110,7 @@ export default function PreviewScreen() {
             await putFile(filePath, generatedHtml, {
               message: `上传文章：${title}（移动端 App）`,
             });
-            steps.push(`文章已上传：library/${filePath}`);
+            steps.push(`文章已上传：${filePath}`);
 
             // 3. 站内搜索数据同步
             try {
@@ -118,7 +118,7 @@ export default function PreviewScreen() {
               const updated = insertSearchEntry(content, {
                 title,
                 keywords: buildSearchKeywords(form),
-                urlPath: `${category.dir}/${titleEn}.html`,
+                urlPath: filePath,
               });
               if (updated !== content) {
                 await putFile('js/library-dynamic.js', updated, {
@@ -137,7 +137,7 @@ export default function PreviewScreen() {
               // 4. 非隐藏文章：同步 library.html 文章列表（中英文）
               try {
                 const { content, sha } = await getFile('library/library.html');
-                const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, title);
+                const updated = insertIntoLibraryHtml(content, category, `${category.dir}/${titleEn}.html`, title);
                 if (updated !== content) {
                   await putFile('library/library.html', updated, {
                     sha,
@@ -150,7 +150,7 @@ export default function PreviewScreen() {
               }
               try {
                 const { content, sha } = await getFile('en/library/library.html');
-                const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, titleEn, true);
+                const updated = insertIntoLibraryHtml(content, category, `${category.dir}/${titleEn}.html`, titleEn, true);
                 if (updated !== content) {
                   await putFile('en/library/library.html', updated, {
                     sha,
@@ -170,6 +170,7 @@ export default function PreviewScreen() {
                   date: form.createDate,
                   kind: newsKind,
                   posterPath: posterPath ?? undefined,
+                  categoryDir: category.dir,
                 });
                 steps.push(...newsSteps);
               }

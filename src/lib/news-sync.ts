@@ -11,6 +11,8 @@ export interface NewsSyncOptions {
   date: string; // YYYY-MM-DD
   kind: NewsKind;
   posterPath?: string; // image/poster/xxx.png（海报新闻时）
+  /** 文章分类目录（相对 library/ 如 paper、works），用于生成正确链接 */
+  categoryDir?: string;
 }
 
 /**
@@ -19,9 +21,9 @@ export interface NewsSyncOptions {
  */
 export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]> {
   const steps: string[] = [];
-  const { title, titleEn, date, kind, posterPath } = opts;
-  const href = `./library/paper/${titleEn}.html`;
-  const enHref = `../library/paper/${titleEn}.html`;
+  const { title, titleEn, date, kind, posterPath, categoryDir = 'paper' } = opts;
+  const href = `./library/${categoryDir}/${titleEn}.html`;
+  const enHref = `../library/${categoryDir}/${titleEn}.html`;
 
   // 1. 主页新闻区（中文）
   try {

@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { fetchAppRelease, fetchSiteRelease, LATEST_APK_URL, SLYWRITE_SITE_URL, compareVersions, type ReleaseInfo } from '../src/lib/releases';
@@ -39,6 +40,7 @@ export default function UpdatesScreen() {
 
   // 下载状态
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0); // 0-100
 
   const checkApp = useCallback(async () => {
     setAppChecking(true);
@@ -71,10 +73,11 @@ export default function UpdatesScreen() {
     checkSite();
   }, [checkApp, checkSite]);
 
-  /** 在 App 内直接下载 APK，完成后通过系统 Intent 自动弹出安装界面（Android） */
+  /** 在 App 内直接下载 APK，显示进度条，完成后通过系统 Intent 自动弹出安装界面（Android） */
   const downloadApk = async () => {
     try {
       setDownloading(true);
+      setDownloadProgress(0);
       const url = LATEST_APK_URL;
       const fileUri = `${FileSystem.cacheDirectory}app-release.apk`;
 
@@ -84,16 +87,28 @@ export default function UpdatesScreen() {
         await FileSystem.deleteAsync(fileUri);
       }
 
-      // 下载
-      const download = FileSystem.createDownloadResumable(url, fileUri);
+      // 带进度回调的下载
+      const download = FileSystem.createDownloadResumable(
+        url,
+        fileUri,
+        {},
+        (progress) => {
+          const pct = progress.totalBytesExpectedToWrite > 0
+            ? Math.round((progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100)
+            : 0;
+          setDownloadProgress(pct);
+        },
+      );
       const result = await download.downloadAsync();
       if (!result || !result.uri) throw new Error('下载失败');
 
-      // 获取 content:// URI（通过 Android FileProvider）
+      // Android：通过 IntentLauncher 打开安装界面
       const contentUri = await FileSystem.getContentUriAsync(result.uri);
-
-      // 打开系统安装界面（Android 自动识别 APK content URI）
-      await Linking.openURL(contentUri);
+      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+        data: contentUri,
+        type: 'application/vnd.android.package-archive',
+        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+      });
     } catch (err) {
       // 兜底：跳转浏览器下载
       Alert.alert('自动安装失败', '将打开浏览器下载，下载完成后请手动点击通知安装。');
@@ -102,6 +117,7 @@ export default function UpdatesScreen() {
       );
     } finally {
       setDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
@@ -161,16 +177,24 @@ export default function UpdatesScreen() {
               <Text style={s.rowText}>{appRelease.body.slice(0, 500)}</Text>
             </>
           )}
-          {/* 下载/安装按钮 */}
+          {/* 下载/安装按钮 + 进度条 */}
           <Pressable
             style={[s.downloadBtn, downloading && s.btnDisabled]}
             onPress={openDownload}
             disabled={downloading}
           >
             <Text style={s.downloadBtnText}>
-              {downloading ? '下载中…' : `下载并安装 APK（${appRelease.tagName}）`}
+              {downloading ? `下载中… ${downloadProgress}%` : `下载并安装 APK（${appRelease.tagName}）`}
             </Text>
           </Pressable>
+          {downloading && (
+            <View style={s.progressWrap}>
+              <View style={s.progressBar}>
+                <View style={[s.progressFill, { width: `${downloadProgress}%` as any }]} />
+              </View>
+              <Text style={s.progressText}>{downloadProgress}%</Text>
+            </View>
+          )}
         </View>
       ) : (
         <View style={[s.box, s.centerBox]}>
@@ -279,4 +303,21 @@ const createStyles = (COLORS: Palette) =>
       backgroundColor: COLORS.bg,
     },
     backText: { color: COLORS.textSecondary, fontSize: 14, fontWeight: '500' },
+    progressWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    progressBar: {
+      flex: 1,
+      height: 6,
+      backgroundColor: COLORS.border,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: COLORS.accent,
+    },
+    progressText: { fontSize: 12, color: COLORS.textSecondary, minWidth: 36, textAlign: 'right' },
   });

@@ -6,7 +6,7 @@
 // - 源码：编辑完整文件（含 head/脚本/导航等）
 // 滚动：正文/源码统一使用 CodeEditor/MarkdownEditor（外层 ScrollView 唯一滚动 + 内部输入框不限制高度），
 // 避免 Android 上 TextInput 内部滚动与父级手势冲突导致的"滑到底部"问题
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Keyboard,
@@ -22,6 +22,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { putFile, getFile } from '../src/lib/github-client';
 import { useEditorStore } from '../src/store/editor-store';
 import { updateArticleHtml } from '../src/lib/article-parser';
+import { insertIntoLibraryHtml, removeFromLibraryHtml } from '../src/lib/article-sync';
+import type { ArticleCategory } from '../src/lib/article-sync';
 import { EditMetaForm } from '../src/components/EditMetaForm';
 import { MarkdownEditor } from '../src/components/MarkdownEditor';
 import { CodeEditor } from '../src/components/CodeEditor';
@@ -56,6 +58,7 @@ export default function EditorScreen() {
     path,
     name,
     content,
+    originalContent,
     sha,
     isNew,
     dirty,
@@ -113,8 +116,12 @@ export default function EditorScreen() {
 
     // 合并元数据变更到 HTML（如果是文章且元数据有修改）
     let saveContent = content;
+    let hiddenChanged = false;
     if (isArticle && metadataDirty && metadata) {
       saveContent = updateArticleHtml(content, metadata);
+      // 检测 hidden 是否真的变了（对比原始内容）
+      const wasHidden = originalContent.includes('data-article-hidden="true"');
+      hiddenChanged = wasHidden !== metadata.hidden;
       // 同步回 store（让 markSaved 正确记录）
       setContent(saveContent);
     }
@@ -125,11 +132,68 @@ export default function EditorScreen() {
         sha: isNew ? undefined : (sha ?? undefined),
         message: isNew ? `新建文件：${targetPath}（移动端 App）` : `编辑文件：${targetPath}（移动端 App）`,
       });
+
+      // 如果是文章且 hidden 状态变化了，同步 library.html（中英文）
+      const syncSteps: string[] = [];
+      if (hiddenChanged && metadata && !isNew) {
+        const fileName = name || targetPath.split('/').pop() || '';
+        // 从路径推断分类目录：library/paper/xxx.html → paper
+        const catDir = targetPath.startsWith('library/')
+          ? targetPath.slice('library/'.length).split('/').slice(0, -1).join('/')
+          : '';
+        if (catDir) {
+          const category: ArticleCategory = { key: catDir, label: catDir, dir: catDir, anchor: '', enAnchor: '' };
+          if (metadata.hidden) {
+            // hidden ON：从 library.html 移除（传纯文件名给 removeFromLibraryHtml）
+            for (const libPath of ['library/library.html', 'en/library/library.html']) {
+              try {
+                const { content: libContent, sha: libSha } = await getFile(libPath);
+                const updated = removeFromLibraryHtml(libContent, category, fileName);
+                if (updated !== libContent) {
+                  await putFile(libPath, updated, {
+                    sha: libSha,
+                    message: `已隐藏文章：${metadata.title}（${libPath}，移动端 App）`,
+                  });
+                  syncSteps.push(`${libPath} 已移除文章条目`);
+                }
+              } catch {
+                syncSteps.push(`${libPath} 同步失败`);
+              }
+            }
+          } else {
+            // hidden OFF：插入到 library.html（传纯文件名给 insertIntoLibraryHtml）
+            const displayTitle = metadata.title;
+            const displayTitleEn = fileName.replace(/\.html?$/, '');
+            for (const libPath of ['library/library.html', 'en/library/library.html']) {
+              try {
+                const { content: libContent, sha: libSha } = await getFile(libPath);
+                const english = libPath.startsWith('en/');
+                const updated = insertIntoLibraryHtml(libContent, category, fileName, english ? displayTitleEn : displayTitle, english);
+                if (updated !== libContent) {
+                  await putFile(libPath, updated, {
+                    sha: libSha,
+                    message: `已取消隐藏文章：${metadata.title}（${libPath}，移动端 App）`,
+                  });
+                  syncSteps.push(`${libPath} 已插入文章条目`);
+                }
+              } catch {
+                syncSteps.push(`${libPath} 同步失败`);
+              }
+            }
+          }
+        }
+      }
+
       markSaved(targetPath, null);
       setSaving(false);
+      const extraHint = syncSteps.length > 0
+        ? '\n\n' + syncSteps.join('\n')
+        : metadataDirty && metadata
+          ? '\n\n提示：如需同步公开列表（library.html），请使用发布功能重新上传。'
+          : '';
       Alert.alert(
         '保存成功',
-        `文件：${targetPath}\n\n约 1-2 分钟后网站生效。`,
+        `文件：${targetPath}\n\n约 1-2 分钟后网站生效。${extraHint}`,
         [{ text: '完成' }],
       );
     } catch (err) {

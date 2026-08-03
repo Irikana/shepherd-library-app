@@ -167,3 +167,27 @@ export function insertIntoLibraryHtml(
     : `\n              <li><a href="${href}">${displayTitle}</a></li>`;
   return html.slice(0, ulEnd) + li + html.slice(ulEnd);
 }
+
+/**
+ * 从 library.html 中移除指定文件名的文章链接（用于隐藏文章时同步取消公开列表）
+ * @param html library.html 内容
+ * @param category 文章所在分类
+ * @param fileName 文件名（含路径前缀，如 paper/xxx.html）
+ * @returns 更新后的 HTML
+ */
+export function removeFromLibraryHtml(
+  html: string,
+  category: ArticleCategory,
+  fileName: string,
+): string {
+  const hrefPattern = `href="${category.dir}/${fileName.split('/').pop()}"`;
+  // 匹配包含该 href 的 <li>…</li> 整行（含前后换行和缩进）
+  return html.replace(
+    new RegExp(`\\n\\s*<li[^>]*>[\\s\\S]*?${escapeRegex(hrefPattern)}[\\s\\S]*?<\\/li>`, 'g'),
+    '',
+  );
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

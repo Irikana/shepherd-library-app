@@ -24,9 +24,8 @@ export function CodeEditor({ value, onChangeText, placeholder, autoFocus, mono =
     <ScrollView
       style={s.scrollArea}
       contentContainerStyle={s.scrollContent}
-      keyboardShouldPersistTaps="handled"
+      keyboardShouldPersistTaps="always"
       keyboardDismissMode="on-drag"
-      nestedScrollEnabled
     >
       <TextInput
         style={[s.editor, mono ? s.mono : s.prose]}
@@ -35,7 +34,6 @@ export function CodeEditor({ value, onChangeText, placeholder, autoFocus, mono =
         placeholder={placeholder}
         placeholderTextColor={colors.textLight}
         multiline
-        scrollEnabled={false}
         textAlignVertical="top"
         autoCapitalize="none"
         autoCorrect={false}
