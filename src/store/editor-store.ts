@@ -1,7 +1,7 @@
 // 内容编辑器状态（文件路径 + 内容 + 版本 sha + 文章元数据），供编辑器页面使用
 import { create } from 'zustand';
 import type { ArticleFormData, ArticleType } from '../types';
-import { isArticleHtml, parseArticleMetadata } from '../lib/article-parser';
+import { extractBodyHtml, isArticleHtml, parseArticleMetadata, replaceBodyHtml } from '../lib/article-parser';
 
 export interface EditorState {
   /** 正在编辑的文件路径（新建时为空字符串） */
@@ -25,6 +25,8 @@ export interface EditorState {
   metadata: ArticleFormData | null;
   /** 元数据是否已修改 */
   metadataDirty: boolean;
+  /** 正文区段 HTML（left-align 内部；无正文区段或非文章时为 null） */
+  bodyHtml: string | null;
 
   /** 加载文件进入编辑器（自动检测文章 HTML 并解析元数据） */
   load: (path: string, content: string, sha?: string | null, name?: string) => void;
@@ -32,6 +34,8 @@ export interface EditorState {
   loadNew: () => void;
   /** 更新源码内容 */
   setContent: (content: string) => void;
+  /** 更新正文区段 HTML（同步写回完整文件内容） */
+  setBodyHtml: (bodyHtml: string) => void;
   /** 更新元数据字段 */
   setMetadata: <K extends keyof ArticleFormData>(key: K, value: ArticleFormData[K]) => void;
   /** 切换标签（元数据表单用） */
@@ -53,6 +57,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   isArticle: false,
   metadata: null,
   metadataDirty: false,
+  bodyHtml: null,
 
   load: (path, content, sha = null, name) => {
     // 检测是否为文章 HTML，如果是则解析元数据
@@ -68,6 +73,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       isArticle: !!article,
       metadata: article,
       metadataDirty: false,
+      bodyHtml: article ? extractBodyHtml(content) : null,
     });
   },
 
@@ -83,13 +89,27 @@ export const useEditorStore = create<EditorState>((set) => ({
       isArticle: false,
       metadata: null,
       metadataDirty: false,
+      bodyHtml: null,
     }),
 
   setContent: (content) =>
     set((state) => ({
       content,
+      // 源码可能修改了正文区段，同步重新提取，保证「正文」标签页与「源码」标签页内容一致
+      bodyHtml: state.isArticle ? extractBodyHtml(content) : null,
       dirty: content !== state.originalContent,
     })),
+
+  setBodyHtml: (bodyHtml) =>
+    set((state) => {
+      if (!state.isArticle) return {};
+      const content = replaceBodyHtml(state.content, bodyHtml);
+      return {
+        bodyHtml,
+        content,
+        dirty: content !== state.originalContent,
+      };
+    }),
 
   setMetadata: (key, value) =>
     set((state) => {
@@ -138,5 +158,6 @@ export const useEditorStore = create<EditorState>((set) => ({
       isNew: false,
       dirty: false,
       metadataDirty: false,
+      bodyHtml: state.isArticle ? extractBodyHtml(state.content) : null,
     })),
 }));

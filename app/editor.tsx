@@ -1,6 +1,10 @@
 // 文本文件编辑器：查看/编辑/保存仓库中的文本文件，支持新建文件
-// 文章 HTML 文件自动检测并提供元数据表单编辑（标签页切换：元数据 / 源码）
-// 滚动修复：移除 ScrollView 包裹，TextInput multiline + flex:1 自行管理滚动
+// 文章 HTML 文件自动检测并提供「元数据 / 正文 / 源码」三标签页编辑：
+// - 元数据：表单化修改标题、作者、日期、性质、标签（增删）等，保存时仅替换元数据区段
+// - 正文：直接编辑正文区段（left-align 内部 HTML），无需面对整页代码
+// - 源码：编辑完整文件（含 head/脚本/导航等）
+// 滚动：正文/源码统一使用 CodeEditor（外层 ScrollView 唯一滚动 + 内部 TextInput 不限制高度），
+// 避免 Android 上 TextInput 内部滚动与父级手势冲突导致的"滑到底部"问题
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -17,6 +21,7 @@ import { putFile, getFile } from '../src/lib/github-client';
 import { useEditorStore } from '../src/store/editor-store';
 import { updateArticleHtml } from '../src/lib/article-parser';
 import { EditMetaForm } from '../src/components/EditMetaForm';
+import { CodeEditor } from '../src/components/CodeEditor';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 
 /** 新建文件时允许的根目录（安全白名单，防止写入仓库任意位置） */
@@ -30,7 +35,14 @@ const NEW_FILE_ROOTS = [
 /** 文件名非法字符（Windows/仓库路径安全） */
 const INVALID_PATH_CHARS = /[\\/\u0000-\u001f<>:"|?*]|\.\./;
 
-type Tab = 'meta' | 'source';
+type Tab = 'meta' | 'body' | 'source';
+
+/** 文章文件的编辑标签页（元数据表单 / 正文区段 / 整页源码） */
+const ARTICLE_TABS: { key: Tab; label: string }[] = [
+  { key: 'meta', label: '元数据' },
+  { key: 'body', label: '正文' },
+  { key: 'source', label: '源码' },
+];
 
 export default function EditorScreen() {
   const router = useRouter();
@@ -47,9 +59,11 @@ export default function EditorScreen() {
     isArticle,
     metadata,
     metadataDirty,
+    bodyHtml,
     load,
     loadNew,
     setContent,
+    setBodyHtml,
     markSaved,
   } = useEditorStore();
   const [saving, setSaving] = useState(false);
@@ -147,21 +161,18 @@ export default function EditorScreen() {
         </Text>
       </View>
 
-      {/* 文章元数据/源码切换标签 */}
+      {/* 文章元数据/正文/源码切换标签 */}
       {isArticle && !isNew && (
         <View style={s.tabs}>
-          <Pressable
-            style={[s.tab, tab === 'meta' && s.tabActive]}
-            onPress={() => setTab('meta')}
-          >
-            <Text style={[s.tabText, tab === 'meta' && s.tabTextActive]}>元数据</Text>
-          </Pressable>
-          <Pressable
-            style={[s.tab, tab === 'source' && s.tabActive]}
-            onPress={() => setTab('source')}
-          >
-            <Text style={[s.tabText, tab === 'source' && s.tabTextActive]}>源码</Text>
-          </Pressable>
+          {ARTICLE_TABS.map((t) => (
+            <Pressable
+              key={t.key}
+              style={[s.tab, tab === t.key && s.tabActive]}
+              onPress={() => setTab(t.key)}
+            >
+              <Text style={[s.tabText, tab === t.key && s.tabTextActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
         </View>
       )}
 
@@ -193,22 +204,36 @@ export default function EditorScreen() {
         </View>
       )}
 
-      {/* 编辑器主体 */}
+      {/* 编辑器主体：文章 → 元数据/正文/源码；普通文件 → 源码 */}
       {isArticle && !isNew && tab === 'meta' ? (
         <View style={s.editorArea}>
           <EditMetaForm />
         </View>
+      ) : isArticle && !isNew && tab === 'body' ? (
+        <View style={s.editorArea}>
+          <View style={s.bodyHint}>
+            <Text style={s.bodyHintText}>
+              正文为 HTML 源码（蓝框/灰引/红警/Callout/折叠块等视觉组件语法与撰写页工具栏一致）
+            </Text>
+          </View>
+          {bodyHtml === null ? (
+            <View style={s.center}>
+              <Text style={s.hint}>未找到正文区域（left-align），请改用「源码」标签页编辑</Text>
+            </View>
+          ) : (
+            <CodeEditor
+              value={bodyHtml}
+              onChangeText={setBodyHtml}
+              placeholder="正文 HTML…"
+              mono={false}
+            />
+          )}
+        </View>
       ) : (
-        <TextInput
-          style={s.editor}
+        <CodeEditor
           value={content}
           onChangeText={setContent}
           placeholder="在此编辑文件内容…"
-          placeholderTextColor={colors.textLight}
-          multiline
-          textAlignVertical="top"
-          autoCapitalize="none"
-          autoCorrect={false}
           autoFocus={isNew}
         />
       )}
@@ -285,16 +310,16 @@ const createStyles = (COLORS: Palette) =>
       backgroundColor: COLORS.bg,
     },
     editorArea: { flex: 1 },
-    editor: {
-      flex: 1,
-      padding: SPACING.md,
-      fontSize: 14,
-      lineHeight: 21,
-      fontFamily: 'monospace',
-      color: COLORS.text,
-      backgroundColor: COLORS.bg,
-      textAlignVertical: 'top',
+    bodyHint: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      backgroundColor: COLORS.bgMuted,
+      borderBottomWidth: 1,
+      borderColor: COLORS.border,
     },
+    bodyHintText: { fontSize: 12, color: COLORS.textLight, lineHeight: 17 },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
+    hint: { fontSize: 13, color: COLORS.textLight, textAlign: 'center', lineHeight: 19 },
     footer: {
       flexDirection: 'row',
       gap: SPACING.sm,

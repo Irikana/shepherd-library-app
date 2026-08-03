@@ -311,3 +311,48 @@ export function updateArticleHtml(html: string, form: ArticleFormData): string {
 
   return result;
 }
+
+/**
+ * 定位正文区段 <div class="left-align">…</div> 的范围（深度匹配嵌套 div，支持正文中的视觉组件）
+ * @returns { start, end }：start 为开标签结束（内容起点），end 为闭合 </div> 的起点（内容终点）
+ */
+function findLeftAlignRange(html: string): { start: number; end: number } | null {
+  const openTag = '<div class="left-align">';
+  const openIdx = html.indexOf(openTag);
+  if (openIdx < 0) return null;
+  const start = openIdx + openTag.length;
+  let pos = start;
+  // left-align 开标签自身占一层，所以从 1 开始；内容里每遇到一个 <div> 加一层
+  let depth = 1;
+  while (pos < html.length) {
+    const openDiv = html.indexOf('<div', pos);
+    const closeDiv = html.indexOf('</div>', pos);
+    if (closeDiv < 0) break; // 结构不完整，视为无正文区段
+    if (openDiv >= 0 && openDiv < closeDiv) {
+      depth++;
+      pos = openDiv + 4;
+    } else {
+      depth--;
+      pos = closeDiv + 6;
+      if (depth === 0) {
+        return { start, end: closeDiv };
+      }
+    }
+  }
+  return null;
+}
+
+/** 提取正文区段内部 HTML（不含 left-align 开闭标签），非文章结构或未找到时返回 null */
+export function extractBodyHtml(html: string): string | null {
+  const range = findLeftAlignRange(html);
+  if (!range) return null;
+  return html.slice(range.start, range.end).trim();
+}
+
+/** 用新正文 HTML 替换 left-align 区段内部内容；未找到正文区段时原样返回 */
+export function replaceBodyHtml(html: string, bodyHtml: string): string {
+  const range = findLeftAlignRange(html);
+  if (!range) return html;
+  const inner = bodyHtml.trim();
+  return html.slice(0, range.start) + '\n        ' + inner + '\n      ' + html.slice(range.end);
+}
