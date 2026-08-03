@@ -202,25 +202,43 @@ const SYMBOL_GROUPS: { title: string; items: { label: string; insert: string }[]
 export function MarkdownEditor({
   scrollPosition,
   onScroll,
+  value,
+  onChangeText,
+  footnotes,
+  editable = true,
 }: {
   /** 恢复滚动位置（切换标签页时传入上次位置，仅首次挂载时应用） */
   scrollPosition?: number;
   /** 滚动位置变化回调（用于保存浏览进度） */
   onScroll?: (y: number) => void;
+  /** 受控值（可选；不传则使用 compose-store 的 form.bodyMarkdown） */
+  value?: string;
+  /** 受控变更回调（与 value 成对使用） */
+  onChangeText?: (text: string) => void;
+  /** 脚注列表（可选；用于「脚注」按钮自动编号，默认取 compose-store form.footnotes） */
+  footnotes?: string[];
+  /** 是否可编辑（默认 true；锁定态由外部传入 false） */
+  editable?: boolean;
 }) {
-  const { form, setField, locked } = useComposeStore();
+  const compose = useComposeStore();
+  const { form, setField, locked } = compose;
   const { colors } = useTheme();
   const s = createStyles(colors);
   const inputRef = React.useRef<TextInput>(null);
   const selectionRef = React.useRef({ start: 0, end: 0 });
   const [symbolsVisible, setSymbolsVisible] = useState(false);
 
+  // 受控模式（内容编辑）与撰写模式（compose-store）二选一
+  const text = value ?? form.bodyMarkdown;
+  const currentFootnotes = footnotes ?? form.footnotes;
+  const changeText = (t: string) => (onChangeText ? onChangeText(t) : setField('bodyMarkdown', t));
+
   // 锁定状态下只读（防误触）
-  const lockedBody = locked.body;
+  const lockedBody = !editable || locked.body;
 
   /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
   const applyInsert = (text: string, cursor: number) => {
-    setField('bodyMarkdown', text);
+    changeText(text);
     selectionRef.current = { start: cursor, end: cursor };
     requestAnimationFrame(() => {
       const input = inputRef.current;
@@ -232,8 +250,8 @@ export function MarkdownEditor({
 
   const handleInsert = (action: InsertAction) => {
     const { start, end } = selectionRef.current;
-    const { text, cursor } = action.insert(form.bodyMarkdown, start, end);
-    applyInsert(text, cursor);
+    const { text: result, cursor } = action.insert(text, start, end);
+    applyInsert(result, cursor);
   };
 
   /** 插入符号片段（含 § 光标占位） */
@@ -241,23 +259,23 @@ export function MarkdownEditor({
     const { start, end } = selectionRef.current;
     const caret = snippet.indexOf('§');
     const clean = snippet.replace('§', '');
-    const text = form.bodyMarkdown.slice(0, start) + clean + form.bodyMarkdown.slice(end);
-    applyInsert(text, start + (caret >= 0 ? caret : clean.length));
+    const next = text.slice(0, start) + clean + text.slice(end);
+    applyInsert(next, start + (caret >= 0 ? caret : clean.length));
   };
 
   /** 脚注按钮：自动编号插入 [^n] */
   const insertFootnote = () => {
     const { start, end } = selectionRef.current;
-    const body = form.bodyMarkdown;
+    const body = text;
     let maxN = 0;
     const re = /\[\^(\d+)\]/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(body)) !== null) {
       maxN = Math.max(maxN, parseInt(m[1], 10));
     }
-    const n = Math.max(maxN, form.footnotes.length) + 1;
-    const text = body.slice(0, start) + `[^${n}]` + body.slice(end);
-    applyInsert(text, start + 3 + String(n).length);
+    const n = Math.max(maxN, currentFootnotes.length) + 1;
+    const next = body.slice(0, start) + `[^${n}]` + body.slice(end);
+    applyInsert(next, start + 3 + String(n).length);
   };
 
   return (
@@ -300,8 +318,8 @@ export function MarkdownEditor({
       <TextInput
         ref={inputRef}
         style={s.editor}
-        value={form.bodyMarkdown}
-        onChangeText={(v) => setField('bodyMarkdown', v)}
+        value={text}
+        onChangeText={changeText}
         onSelectionChange={(e) => {
           selectionRef.current = {
             start: e.nativeEvent.selection.start,
@@ -317,7 +335,7 @@ export function MarkdownEditor({
         editable={!lockedBody}
         showSoftInputOnFocus={!lockedBody}
       />
-      <Text style={s.counter}>{form.bodyMarkdown.length} 字</Text>
+      <Text style={s.counter}>{text.length} 字</Text>
 
       {/* 数学符号面板 */}
       <Modal

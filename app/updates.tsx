@@ -60,17 +60,18 @@ export default function UpdatesScreen() {
       <Text style={s.sectionTitle}>当前版本</Text>
       <View style={s.box}>
         <View style={s.row}>
-          <Text style={s.rowLabel}>软件版本</Text>
+          <Text style={s.rowLabel}>App 版本</Text>
           <Text style={s.rowValue}>v{APP_VERSION}</Text>
         </View>
         <View style={s.row}>
           <Text style={s.rowLabel}>网站版本</Text>
           <Text style={s.rowValue}>{siteVersion ?? '—'}</Text>
         </View>
+        <Text style={s.rowHint}>「网站版本」是牧羊人图书馆网站的动态版本号（alpha-xxx），与 App 更新无关</Text>
       </View>
 
-      {/* 最新版本 */}
-      <Text style={s.sectionTitle}>最新版本</Text>
+      {/* 最新版本（App 自身） */}
+      <Text style={s.sectionTitle}>App 最新版本</Text>
       {checking ? (
         <View style={[s.box, s.centerBox]}>
           <ActivityIndicator color={colors.accent} />
@@ -79,6 +80,9 @@ export default function UpdatesScreen() {
       ) : error ? (
         <View style={[s.box, s.centerBox]}>
           <Text style={s.errorText}>{error}</Text>
+          <Pressable style={[s.refreshBtn, s.retryBtn]} onPress={check} disabled={checking}>
+            <Text style={s.refreshText}>重试</Text>
+          </Pressable>
         </View>
       ) : release ? (
         <View style={s.box}>
@@ -97,15 +101,17 @@ export default function UpdatesScreen() {
               <Text style={s.rowText}>{release.body.slice(0, 500)}</Text>
             </>
           )}
-          {hasNewer && (
-            <Pressable style={s.downloadBtn} onPress={openDownload}>
-              <Text style={s.downloadBtnText}>下载最新 APK</Text>
-            </Pressable>
-          )}
+          {/* 始终显示下载按钮（可重装当前版本，不限于有新版本时） */}
+          <Pressable style={s.downloadBtn} onPress={openDownload}>
+            <Text style={s.downloadBtnText}>下载 APK（{release.tagName}）</Text>
+          </Pressable>
         </View>
       ) : (
         <View style={[s.box, s.centerBox]}>
           <Text style={s.hint}>暂无发布版本。构建完成后会自动发布，届时可在此检查更新。</Text>
+          <Pressable style={s.siteBtn} onPress={openSite}>
+            <Text style={s.siteBtnText}>访问 SlyWrite 网站</Text>
+          </Pressable>
         </View>
       )}
 
@@ -152,6 +158,7 @@ const createStyles = (COLORS: Palette) =>
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xs },
     rowLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
     rowValue: { fontSize: 15, color: COLORS.text, fontWeight: '700' },
+    rowHint: { fontSize: 11, color: COLORS.textLight, marginTop: SPACING.xs, lineHeight: 16 },
     rowLabelSmall: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.sm },
     rowText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19, marginTop: 2 },
     newerText: { color: COLORS.accent },
@@ -172,6 +179,7 @@ const createStyles = (COLORS: Palette) =>
       alignItems: 'center',
       marginBottom: SPACING.lg,
     },
+    retryBtn: { marginTop: SPACING.md, alignSelf: 'center', paddingHorizontal: SPACING.lg, marginBottom: 0 },
     refreshText: { color: COLORS.accent, fontWeight: '600', fontSize: 14 },
     siteBtn: {
       borderWidth: 1,

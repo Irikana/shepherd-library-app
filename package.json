@@ -1,6 +1,6 @@
 {
     "name": "shepherd-library-app",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "main": "expo-router/entry",
     "scripts": {
         "start": "expo start",
@@ -32,11 +32,13 @@
         "react-native-screens": "~4.4.0",
         "react-native-web": "~0.19.13",
         "react-native-webview": "13.12.5",
+        "turndown": "^7.2.4",
         "zustand": "^5.0.2"
     },
     "devDependencies": {
         "@babel/core": "^7.25.2",
         "@types/react": "~18.3.12",
+        "@types/turndown": "^5.0.6",
         "typescript": "^5.3.3"
     },
     "private": true

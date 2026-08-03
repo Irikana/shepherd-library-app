@@ -33,7 +33,14 @@ export default function LoginScreen() {
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <View style={s.header}>
         <Image source={LogoImage} style={[s.logo, isDark ? s.logoDark : s.logoLight]} resizeMode="contain" />
-        <Text style={s.title}>SlyWrite</Text>
+        <Text
+          style={s.title}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          SlyWrite
+        </Text>
         <Text style={s.subtitle}>牧羊人图书馆 · 写作管理</Text>
       </View>
 

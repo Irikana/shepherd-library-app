@@ -1,9 +1,10 @@
 // 文本文件编辑器：查看/编辑/保存仓库中的文本文件，支持新建文件
 // 文章 HTML 文件自动检测并提供「元数据 / 正文 / 源码」三标签页编辑：
 // - 元数据：表单化修改标题、作者、日期、性质、标签（增删）等，保存时仅替换元数据区段
-// - 正文：直接编辑正文区段（left-align 内部 HTML），无需面对整页代码
+// - 正文：撰写式体验——自动把正文区段 HTML 还原为 Markdown，用 MarkdownEditor（工具栏 + 数学符号）编辑，
+//   保存时渲染回 HTML；视觉组件（蓝框/灰引/Callout/折叠块等）原样保留
 // - 源码：编辑完整文件（含 head/脚本/导航等）
-// 滚动：正文/源码统一使用 CodeEditor（外层 ScrollView 唯一滚动 + 内部 TextInput 不限制高度），
+// 滚动：正文/源码统一使用 CodeEditor/MarkdownEditor（外层 ScrollView 唯一滚动 + 内部输入框不限制高度），
 // 避免 Android 上 TextInput 内部滚动与父级手势冲突导致的"滑到底部"问题
 import React, { useEffect, useState } from 'react';
 import {
@@ -21,6 +22,7 @@ import { putFile, getFile } from '../src/lib/github-client';
 import { useEditorStore } from '../src/store/editor-store';
 import { updateArticleHtml } from '../src/lib/article-parser';
 import { EditMetaForm } from '../src/components/EditMetaForm';
+import { MarkdownEditor } from '../src/components/MarkdownEditor';
 import { CodeEditor } from '../src/components/CodeEditor';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 
@@ -59,11 +61,11 @@ export default function EditorScreen() {
     isArticle,
     metadata,
     metadataDirty,
-    bodyHtml,
+    bodyMarkdown,
     load,
     loadNew,
     setContent,
-    setBodyHtml,
+    setBodyMarkdown,
     markSaved,
   } = useEditorStore();
   const [saving, setSaving] = useState(false);
@@ -213,19 +215,18 @@ export default function EditorScreen() {
         <View style={s.editorArea}>
           <View style={s.bodyHint}>
             <Text style={s.bodyHintText}>
-              正文为 HTML 源码（蓝框/灰引/红警/Callout/折叠块等视觉组件语法与撰写页工具栏一致）
+              Markdown 正文编辑：与撰写页一致，可插入视觉组件（蓝框/灰引/红警/Callout/折叠块）、数学公式与脚注
             </Text>
           </View>
-          {bodyHtml === null ? (
+          {bodyMarkdown === null ? (
             <View style={s.center}>
-              <Text style={s.hint}>未找到正文区域（left-align），请改用「源码」标签页编辑</Text>
+              <Text style={s.hint}>未能自动还原正文为 Markdown，请改用「源码」标签页编辑</Text>
             </View>
           ) : (
-            <CodeEditor
-              value={bodyHtml}
-              onChangeText={setBodyHtml}
-              placeholder="正文 HTML…"
-              mono={false}
+            <MarkdownEditor
+              value={bodyMarkdown}
+              onChangeText={setBodyMarkdown}
+              footnotes={metadata?.footnotes ?? []}
             />
           )}
         </View>

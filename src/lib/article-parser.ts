@@ -1,5 +1,6 @@
 // 文章 HTML 元数据解析与更新（编辑已有文章时使用）
 // 解析 generateArticleHtml 产出的 HTML 结构，提取元数据；更新时仅替换元数据区段，保留正文 HTML
+import { marked } from 'marked';
 import type { ArticleFormData, ArticleType } from '../types';
 import { ARTICLE_CATEGORIES } from './article-sync';
 import { formatDateCN } from '../templates/article';
@@ -355,4 +356,29 @@ export function replaceBodyHtml(html: string, bodyHtml: string): string {
   if (!range) return html;
   const inner = bodyHtml.trim();
   return html.slice(0, range.start) + '\n        ' + inner + '\n      ' + html.slice(range.end);
+}
+
+/**
+ * 将正文 Markdown 渲染为正文区段 HTML（含脚注上标引用）。
+ * 与 article.ts 模板的脚注逻辑一致：[^n] 转 <sup class="article-footnote-ref">…</sup>，
+ * 代码块/行内代码中的字面 [^n] 保护不替换，编号超出脚注列表范围的引用保留原文。
+ */
+export function markdownToBodyHtml(markdown: string, footnotes: string[]): string {
+  const codeSpans: string[] = [];
+  const protectedMd = (markdown ?? '').replace(
+    /(```[\s\S]*?```|`[^`\n]*`)/g,
+    (m) => {
+      codeSpans.push(m);
+      return `\u0000${codeSpans.length - 1}\u0000`;
+    },
+  );
+  const footnoteCount = footnotes?.length ?? 0;
+  const bodyWithFootnotes = protectedMd
+    .replace(/\[\^(\d+)\]/g, (match, n: string) => {
+      const idx = parseInt(n, 10);
+      if (idx < 1 || idx > footnoteCount) return match;
+      return `<sup class="article-footnote-ref" id="article-fnref-${n}"><a href="#article-fn-${n}">[${n}]</a></sup>`;
+    })
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => codeSpans[parseInt(i, 10)]);
+  return marked.parse(bodyWithFootnotes, { async: false }) as string;
 }

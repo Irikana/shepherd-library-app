@@ -24,8 +24,8 @@ export const LATEST_RELEASE_URL = `${GITHUB_API}/repos/${REPO_CONFIG.owner}/${RE
 /** 直接下载最新 APK 的固定链接（GitHub 会自动跳转到最新 release 的该 asset） */
 export const LATEST_APK_URL = `https://github.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases/latest/download/app-release.apk`;
 
-/** SlyWrite 官网（牧羊人图书馆网站上的项目页） */
-export const SLYWRITE_SITE_URL = 'https://irikana.github.io/slywrite/';
+/** SlyWrite 官网（已迁移至 app 项目 GitHub Pages） */
+export const SLYWRITE_SITE_URL = 'https://irikana.github.io/shepherd-library-app/';
 
 interface RawRelease {
   tag_name: string;

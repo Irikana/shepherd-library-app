@@ -65,7 +65,7 @@ export default function HomeScreen() {
     },
     {
       title: '内容编辑',
-      desc: '浏览仓库文件树，查看并编辑 HTML/CSS/JS/Markdown 等文本文件',
+      desc: '浏览仓库文件树，编辑已有文章/新闻——元数据表单 + Markdown 正文 + 源码三种方式；也可编辑其他文本文件',
       href: '/browser',
       enabled: true,
     },
@@ -118,7 +118,14 @@ export default function HomeScreen() {
           resizeMode="contain"
         />
         <View style={{ flex: 1 }}>
-          <Text style={s.brandName}>SlyWrite</Text>
+          <Text
+            style={s.brandName}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            SlyWrite
+          </Text>
           <Text style={s.brandSub}>牧羊人图书馆 · 写作管理</Text>
         </View>
         <View style={s.brandRight}>

@@ -1,7 +1,14 @@
 // 内容编辑器状态（文件路径 + 内容 + 版本 sha + 文章元数据），供编辑器页面使用
 import { create } from 'zustand';
 import type { ArticleFormData, ArticleType } from '../types';
-import { extractBodyHtml, isArticleHtml, parseArticleMetadata, replaceBodyHtml } from '../lib/article-parser';
+import {
+  extractBodyHtml,
+  isArticleHtml,
+  markdownToBodyHtml,
+  parseArticleMetadata,
+  replaceBodyHtml,
+} from '../lib/article-parser';
+import { htmlToMarkdown } from '../lib/html-to-markdown';
 
 export interface EditorState {
   /** 正在编辑的文件路径（新建时为空字符串） */
@@ -27,6 +34,10 @@ export interface EditorState {
   metadataDirty: boolean;
   /** 正文区段 HTML（left-align 内部；无正文区段或非文章时为 null） */
   bodyHtml: string | null;
+  /** 正文区段的 Markdown 还原（撰写式编辑用；转换失败或非文章时为 null） */
+  bodyMarkdown: string | null;
+  /** 正文 Markdown 是否已修改（相对 load 时的还原值） */
+  bodyDirty: boolean;
 
   /** 加载文件进入编辑器（自动检测文章 HTML 并解析元数据） */
   load: (path: string, content: string, sha?: string | null, name?: string) => void;
@@ -36,6 +47,8 @@ export interface EditorState {
   setContent: (content: string) => void;
   /** 更新正文区段 HTML（同步写回完整文件内容） */
   setBodyHtml: (bodyHtml: string) => void;
+  /** 更新正文 Markdown（撰写式编辑；渲染为 HTML 并写回完整文件内容） */
+  setBodyMarkdown: (markdown: string) => void;
   /** 更新元数据字段 */
   setMetadata: <K extends keyof ArticleFormData>(key: K, value: ArticleFormData[K]) => void;
   /** 切换标签（元数据表单用） */
@@ -58,10 +71,13 @@ export const useEditorStore = create<EditorState>((set) => ({
   metadata: null,
   metadataDirty: false,
   bodyHtml: null,
+  bodyMarkdown: null,
+  bodyDirty: false,
 
   load: (path, content, sha = null, name) => {
     // 检测是否为文章 HTML，如果是则解析元数据
     const article = isArticleHtml(content) ? parseArticleMetadata(content, path) : null;
+    const bodyHtml = article ? extractBodyHtml(content) : null;
     set({
       path,
       name: name ?? path.split('/').pop() ?? '',
@@ -73,7 +89,9 @@ export const useEditorStore = create<EditorState>((set) => ({
       isArticle: !!article,
       metadata: article,
       metadataDirty: false,
-      bodyHtml: article ? extractBodyHtml(content) : null,
+      bodyHtml,
+      bodyMarkdown: bodyHtml ? htmlToMarkdown(bodyHtml) : null,
+      bodyDirty: false,
     });
   },
 
@@ -90,6 +108,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       metadata: null,
       metadataDirty: false,
       bodyHtml: null,
+      bodyMarkdown: null,
+      bodyDirty: false,
     }),
 
   setContent: (content) =>
@@ -108,6 +128,20 @@ export const useEditorStore = create<EditorState>((set) => ({
         bodyHtml,
         content,
         dirty: content !== state.originalContent,
+      };
+    }),
+
+  setBodyMarkdown: (markdown) =>
+    set((state) => {
+      if (!state.isArticle || !state.metadata) return {};
+      const bodyHtml = markdownToBodyHtml(markdown, state.metadata.footnotes);
+      const content = replaceBodyHtml(state.content, bodyHtml);
+      return {
+        bodyMarkdown: markdown,
+        bodyHtml,
+        content,
+        dirty: content !== state.originalContent,
+        bodyDirty: true,
       };
     }),
 
@@ -159,5 +193,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       dirty: false,
       metadataDirty: false,
       bodyHtml: state.isArticle ? extractBodyHtml(state.content) : null,
+      // 保存后重新以当前正文为基准还原 Markdown（保留撰写式编辑一致性）
+      bodyMarkdown: state.isArticle && state.bodyHtml ? htmlToMarkdown(state.bodyHtml) : null,
+      bodyDirty: false,
     })),
 }));
