@@ -92,15 +92,10 @@ export const useComposeStore = create<ComposeState>((set) => ({
   toggleTag: (tag) =>
     set((state) => {
       const tags = [...state.form.tags];
-      if (tag === '无') {
-        return { form: { ...state.form, tags: ['无'] } };
-      }
-      // 移除"无"
-      const filtered = tags.filter((t) => t !== '无');
-      const idx = filtered.indexOf(tag);
-      if (idx >= 0) filtered.splice(idx, 1);
-      else filtered.push(tag);
-      return { form: { ...state.form, tags: filtered.length ? filtered : ['无'] } };
+      const idx = tags.indexOf(tag);
+      if (idx >= 0) tags.splice(idx, 1);
+      else tags.push(tag);
+      return { form: { ...state.form, tags } };
     }),
 
   setArticleType: (t) => set((state) => ({ form: { ...state.form, articleType: t } })),

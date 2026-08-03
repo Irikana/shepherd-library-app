@@ -179,7 +179,7 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
             } else if (!v && hasNews) {
               // 关闭：移除「新闻」标签
               const next = tags.filter((t) => t !== '新闻');
-              setField('tags', next.length ? next : ['无']);
+              setField('tags', next);
             }
           }}
           trackColor={{ false: colors.border, true: colors.accent }}

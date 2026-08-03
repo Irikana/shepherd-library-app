@@ -39,6 +39,9 @@ export interface EditorState {
   /** 正文 Markdown 是否已修改（相对 load 时的还原值） */
   bodyDirty: boolean;
 
+  /** 各标签页锁定状态（true = 只读防误触，与撰写页锁一致） */
+  locked: { meta: boolean; body: boolean; source: boolean };
+
   /** 加载文件进入编辑器（自动检测文章 HTML 并解析元数据） */
   load: (path: string, content: string, sha?: string | null, name?: string) => void;
   /** 新建文件模式 */
@@ -55,6 +58,8 @@ export interface EditorState {
   toggleMetaTag: (tag: string) => void;
   /** 设置文章性质 */
   setMetaArticleType: (t: ArticleType) => void;
+  /** 切换某个标签页的锁定状态（防误触） */
+  toggleLock: (tab: 'meta' | 'body' | 'source') => void;
   /** 保存成功后的同步 */
   markSaved: (path: string, sha: string | null) => void;
 }
@@ -73,6 +78,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   bodyHtml: null,
   bodyMarkdown: null,
   bodyDirty: false,
+  locked: { meta: false, body: false, source: false },
 
   load: (path, content, sha = null, name) => {
     // 检测是否为文章 HTML，如果是则解析元数据
@@ -93,6 +99,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       bodyHtml,
       bodyMarkdown: bodyHtml ? htmlToMarkdown(bodyHtml) : null,
       bodyDirty: false,
+      locked: { meta: false, body: false, source: false },
     });
   },
 
@@ -111,6 +118,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       bodyHtml: null,
       bodyMarkdown: null,
       bodyDirty: false,
+      locked: { meta: false, body: false, source: false },
     }),
 
   setContent: (content) =>
@@ -159,18 +167,11 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => {
       if (!state.metadata) return {};
       const tags = [...state.metadata.tags];
-      if (tag === '无') {
-        return {
-          metadata: { ...state.metadata, tags: ['无'] },
-          metadataDirty: true,
-        };
-      }
-      const filtered = tags.filter((t) => t !== '无');
-      const idx = filtered.indexOf(tag);
-      if (idx >= 0) filtered.splice(idx, 1);
-      else filtered.push(tag);
+      const idx = tags.indexOf(tag);
+      if (idx >= 0) tags.splice(idx, 1);
+      else tags.push(tag);
       return {
-        metadata: { ...state.metadata, tags: filtered.length ? filtered : [] },
+        metadata: { ...state.metadata, tags },
         metadataDirty: true,
       };
     }),
@@ -183,6 +184,11 @@ export const useEditorStore = create<EditorState>((set) => ({
         metadataDirty: true,
       };
     }),
+
+  toggleLock: (tab) =>
+    set((state) => ({
+      locked: { ...state.locked, [tab]: !state.locked[tab] },
+    })),
 
   markSaved: (path, sha) =>
     set((state) => ({

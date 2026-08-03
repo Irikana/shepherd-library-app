@@ -12,7 +12,7 @@ import type { ArticleType } from '../types';
 const ARTICLE_TYPES: ArticleType[] = ['录音文章', '手写文章', '信息文章', '实验性文章'];
 
 export function EditMetaForm() {
-  const { metadata, setMetadata, toggleMetaTag, setMetaArticleType } = useEditorStore();
+  const { metadata, setMetadata, toggleMetaTag, setMetaArticleType, locked } = useEditorStore();
   const allTags = useConfigStore((s) => s.tags);
   const { colors } = useTheme();
   const s = createStyles(colors);
@@ -20,6 +20,9 @@ export function EditMetaForm() {
   const [timePickerVisible, setTimePickerVisible] = useState(false);
 
   if (!metadata) return null;
+
+  // 锁定状态下只读（防误触）
+  const lockedMeta = locked.meta;
 
   const updateFootnote = (index: number, text: string) => {
     const next = [...metadata.footnotes];
@@ -47,6 +50,7 @@ export function EditMetaForm() {
         onChangeText={(v) => setMetadata('title', v)}
         placeholder="文章标题"
         placeholderTextColor={colors.textLight}
+        editable={!lockedMeta}
       />
 
       {/* 作者 */}
@@ -57,6 +61,7 @@ export function EditMetaForm() {
         onChangeText={(v) => setMetadata('author', v)}
         placeholder="作者名"
         placeholderTextColor={colors.textLight}
+        editable={!lockedMeta}
       />
 
       {/* 创建日期 */}
@@ -67,7 +72,7 @@ export function EditMetaForm() {
             {metadata.createDate || 'YYYY-MM-DD'}
           </Text>
         </View>
-        <Pressable style={s.sideBtn} onPress={() => setDatePickerVisible(true)}>
+        <Pressable style={[s.sideBtn, lockedMeta && s.btnDisabled]} onPress={() => setDatePickerVisible(true)} disabled={lockedMeta}>
           <Text style={s.sideBtnText}>日历</Text>
         </Pressable>
       </View>
@@ -78,8 +83,9 @@ export function EditMetaForm() {
         {ARTICLE_TYPES.map((t) => (
           <Pressable
             key={t}
-            style={[s.chip, metadata.articleType === t && s.chipActive]}
+            style={[s.chip, metadata.articleType === t && s.chipActive, lockedMeta && s.btnDisabled]}
             onPress={() => setMetaArticleType(t)}
+            disabled={lockedMeta}
           >
             <Text style={[s.chipText, metadata.articleType === t && s.chipTextActive]}>{t}</Text>
           </Pressable>
@@ -97,8 +103,9 @@ export function EditMetaForm() {
               onChangeText={(v) => setMetadata('recordingDuration', v)}
               placeholder="如 12:34"
               placeholderTextColor={colors.textLight}
+              editable={!lockedMeta}
             />
-            <Pressable style={s.sideBtn} onPress={() => setTimePickerVisible(true)}>
+            <Pressable style={[s.sideBtn, lockedMeta && s.btnDisabled]} onPress={() => setTimePickerVisible(true)} disabled={lockedMeta}>
               <Text style={s.sideBtnText}>小时钟</Text>
             </Pressable>
           </View>
@@ -120,8 +127,10 @@ export function EditMetaForm() {
                 active && tag === '有删减' && s.chipEdited,
                 active && tag === '小说' && s.chipNovel,
                 active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && tag !== '小说' && s.chipActive,
+                lockedMeta && s.btnDisabled,
               ]}
               onPress={() => toggleMetaTag(tag)}
+              disabled={lockedMeta}
             >
               <Text
                 style={[
@@ -149,6 +158,7 @@ export function EditMetaForm() {
         placeholder="文章页脚的补充说明"
         placeholderTextColor={colors.textLight}
         multiline
+        editable={!lockedMeta}
       />
 
       {/* 脚注 */}
@@ -164,15 +174,17 @@ export function EditMetaForm() {
             placeholder={`脚注 ${i + 1} 的内容`}
             placeholderTextColor={colors.textLight}
             multiline
+            editable={!lockedMeta}
           />
-          <Pressable style={s.footnoteDel} onPress={() => removeFootnote(i)}>
+          <Pressable style={[s.footnoteDel, lockedMeta && s.btnDisabled]} onPress={() => removeFootnote(i)} disabled={lockedMeta}>
             <Text style={s.footnoteDelText}>删除</Text>
           </Pressable>
         </View>
       ))}
       <Pressable
-        style={s.addBtn}
+        style={[s.addBtn, lockedMeta && s.btnDisabled]}
         onPress={() => setMetadata('footnotes', [...metadata.footnotes, ''])}
+        disabled={lockedMeta}
       >
         <Text style={s.addBtnText}>+ 添加脚注</Text>
       </Pressable>
@@ -187,6 +199,7 @@ export function EditMetaForm() {
           value={metadata.includeMathJax}
           onValueChange={(v) => setMetadata('includeMathJax', v)}
           trackColor={{ false: colors.border, true: colors.accent }}
+          disabled={lockedMeta}
         />
       </View>
 
@@ -200,6 +213,7 @@ export function EditMetaForm() {
           value={metadata.hidden}
           onValueChange={(v) => setMetadata('hidden', v)}
           trackColor={{ false: colors.border, true: colors.accent }}
+          disabled={lockedMeta}
         />
       </View>
 
@@ -307,4 +321,5 @@ const createStyles = (COLORS: Palette) =>
     },
     addBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
     switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.md },
+    btnDisabled: { opacity: 0.45 },
   });

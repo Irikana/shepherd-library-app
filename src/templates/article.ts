@@ -20,9 +20,9 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** 渲染标签 spans（内置标签带专属类名，自定义标签用通用样式） */
+/** 渲染标签 spans（内置标签带专属类名，自定义标签用通用样式；无标签时显示"无"字） */
 function renderTags(tags: string[]): string {
-  if (!tags.length) return '<span class="article-tag">无</span>';
+  if (!tags.length) return '无';
   return tags
     .map((tag) => {
       if (tag === '包含AI') return '<span class="article-tag tag-ai">包含AI</span>';

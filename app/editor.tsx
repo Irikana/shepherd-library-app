@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -62,10 +63,12 @@ export default function EditorScreen() {
     metadata,
     metadataDirty,
     bodyMarkdown,
+    locked,
     load,
     loadNew,
     setContent,
     setBodyMarkdown,
+    toggleLock,
     markSaved,
   } = useEditorStore();
   const [saving, setSaving] = useState(false);
@@ -146,6 +149,18 @@ export default function EditorScreen() {
     router.back();
   };
 
+  /** 切换当前标签页的锁定状态（防误触） */
+  const handleToggleLock = () => {
+    toggleLock(tab);
+  };
+
+  /** 切换标签页：收起键盘 */
+  const switchTab = (next: Tab) => {
+    if (next === tab) return;
+    Keyboard.dismiss();
+    setTab(next);
+  };
+
   const hasChanges = dirty || metadataDirty || isNew;
 
   return (
@@ -163,19 +178,33 @@ export default function EditorScreen() {
         </Text>
       </View>
 
-      {/* 文章元数据/正文/源码切换标签 */}
+      {/* 文章元数据/正文/源码切换标签 + 锁定开关 */}
       {isArticle && !isNew && (
         <View style={s.tabs}>
           {ARTICLE_TABS.map((t) => (
             <Pressable
               key={t.key}
               style={[s.tab, tab === t.key && s.tabActive]}
-              onPress={() => setTab(t.key)}
+              onPress={() => switchTab(t.key)}
             >
               <Text style={[s.tabText, tab === t.key && s.tabTextActive]}>{t.label}</Text>
             </Pressable>
           ))}
+          <Pressable
+            style={[s.lockBtn, locked[tab] && s.lockBtnOn]}
+            onPress={handleToggleLock}
+            accessibilityLabel={locked[tab] ? '解锁当前页' : '锁定当前页'}
+          >
+            <Text style={[s.lockText, locked[tab] && s.lockTextOn]}>
+              {locked[tab] ? '已锁定' : '锁定'}
+            </Text>
+          </Pressable>
         </View>
+      )}
+      {(isArticle && !isNew) && (
+        <Text style={s.lockHint}>
+          锁定后当前页只读，切换查看不会误触；{locked.meta || locked.body || locked.source ? '已锁定' : '未锁定'}
+        </Text>
       )}
 
       {/* 新建文件：选择目录 + 文件名 */}
@@ -227,6 +256,7 @@ export default function EditorScreen() {
               value={bodyMarkdown}
               onChangeText={setBodyMarkdown}
               footnotes={metadata?.footnotes ?? []}
+              editable={!locked.body}
             />
           )}
         </View>
@@ -236,6 +266,7 @@ export default function EditorScreen() {
           onChangeText={setContent}
           placeholder="在此编辑文件内容…"
           autoFocus={isNew}
+          editable={!locked.source}
         />
       )}
 
@@ -284,6 +315,26 @@ const createStyles = (COLORS: Palette) =>
     },
     tabText: { fontSize: 15, color: COLORS.textSecondary },
     tabTextActive: { color: COLORS.accent, fontWeight: '600' },
+    lockBtn: {
+      paddingHorizontal: SPACING.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderLeftWidth: 1,
+      borderLeftColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+    },
+    lockBtnOn: { backgroundColor: COLORS.accent },
+    lockText: { fontSize: 13, color: COLORS.textSecondary },
+    lockTextOn: { color: '#fff', fontWeight: '600' },
+    lockHint: {
+      fontSize: 11,
+      color: COLORS.textLight,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: 4,
+      backgroundColor: COLORS.bgMuted,
+      borderBottomWidth: 1,
+      borderBottomColor: COLORS.border,
+    },
     newBox: {
       padding: SPACING.md,
       borderBottomWidth: 1,

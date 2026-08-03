@@ -6,8 +6,8 @@ export type ComposeKind = 'article' | 'news';
 /** 文章性质（录音/手写/信息/实验性），区别于文章分类（library/ 下目录） */
 export type ArticleType = '录音文章' | '手写文章' | '信息文章' | '实验性文章';
 
-/** 内置文章属性标签（此外支持用户自定义标签） */
-export type ArticleTagName = '新闻' | '小说' | '包含AI' | '有删减' | '无';
+/** 内置文章属性标签（此外支持用户自定义标签；无标签时页面显示"无"字，不占用标签） */
+export type ArticleTagName = '新闻' | '小说' | '包含AI' | '有删减';
 
 /** 新闻形态（文章在新闻板块展示时的形态） */
 export type NewsKind = 'text' | 'poster';

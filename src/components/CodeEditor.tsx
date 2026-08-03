@@ -13,9 +13,11 @@ interface CodeEditorProps {
   autoFocus?: boolean;
   /** 等宽字体（代码/HTML）还是正文字体（正文 HTML 编辑） */
   mono?: boolean;
+  /** 是否可编辑（默认 true；锁定态由外部传入 false） */
+  editable?: boolean;
 }
 
-export function CodeEditor({ value, onChangeText, placeholder, autoFocus, mono = true }: CodeEditorProps) {
+export function CodeEditor({ value, onChangeText, placeholder, autoFocus, mono = true, editable = true }: CodeEditorProps) {
   const { colors } = useTheme();
   const s = createStyles(colors);
   return (
@@ -38,6 +40,8 @@ export function CodeEditor({ value, onChangeText, placeholder, autoFocus, mono =
         autoCapitalize="none"
         autoCorrect={false}
         autoFocus={autoFocus}
+        editable={editable}
+        showSoftInputOnFocus={editable}
       />
     </ScrollView>
   );

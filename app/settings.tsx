@@ -153,8 +153,8 @@ export default function SettingsScreen() {
         {tags.map((t) => (
           <View key={t} style={s.itemRow}>
             <Text style={s.itemLabel}>{t}</Text>
-            <Text style={s.itemMark}>{['新闻', '小说', '包含AI', '有删减', '无'].includes(t) ? '内置' : '自定义'}</Text>
-            {!['新闻', '小说', '包含AI', '有删减', '无'].includes(t) && (
+            <Text style={s.itemMark}>{['新闻', '小说', '包含AI', '有删减'].includes(t) ? '内置' : '自定义'}</Text>
+            {!['新闻', '小说', '包含AI', '有删减'].includes(t) && (
               <Pressable
                 style={s.delBtn}
                 onPress={() =>

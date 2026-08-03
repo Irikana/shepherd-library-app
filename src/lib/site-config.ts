@@ -12,8 +12,8 @@ export interface UploadDir {
 /** 配置文件在仓库中的路径（网站仓库根目录） */
 export const SITE_CONFIG_PATH = 'slywrite-config.json';
 
-/** 内置标签（不可删除；「无」为特殊占位） */
-export const DEFAULT_TAGS: string[] = ['新闻', '小说', '包含AI', '有删减', '无'];
+/** 内置标签（不可删除；无标签时页面直接显示"无"字，不占用标签位） */
+export const DEFAULT_TAGS: string[] = ['新闻', '小说', '包含AI', '有删减'];
 
 /** 内置上传目录（不可删除） */
 export const DEFAULT_UPLOAD_DIRS: UploadDir[] = [

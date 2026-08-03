@@ -61,7 +61,9 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
   const articleType = (typeMatch ? extractText(typeMatch[1]) : '信息文章') as ArticleType;
 
   // 标签
-  const tagsSectionMatch = html.match(/标签：<\/span>\s*<span class="article-meta-value">\s*([\s\S]*?)<\/span>/);
+  // 注意：捕获区段必须到 article-meta-value 的闭合 </span> 及其所属 </div>，
+  // 否则非贪婪的 [\s\S]*? 会在第一个标签的 </span> 处截断，导致标签解析为空
+  const tagsSectionMatch = html.match(/标签：<\/span>\s*<span class="article-meta-value">\s*([\s\S]*?)<\/span>\s*<\/div>/);
   const tags: string[] = [];
   if (tagsSectionMatch) {
     const tagRegex = /<span class="article-tag[^"]*">([\s\S]*?)<\/span>/g;
@@ -131,9 +133,9 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
   };
 }
 
-/** 渲染标签 spans（与 article.ts 模板一致） */
+/** 渲染标签 spans（与 article.ts 模板一致；无标签时显示"无"字） */
 function renderTags(tags: string[]): string {
-  if (!tags.length) return '<span class="article-tag">无</span>';
+  if (!tags.length) return '无';
   return tags
     .map((tag) => {
       if (tag === '包含AI') return '<span class="article-tag tag-ai">包含AI</span>';
