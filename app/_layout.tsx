@@ -6,12 +6,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../src/store/auth-store';
 import { useSettingsStore } from '../src/store/settings-store';
 import { useDraftsStore } from '../src/store/drafts-store';
+import { useConfigStore } from '../src/store/config-store';
 import { useTheme, type Palette } from '../src/theme';
 
 export default function RootLayout() {
   const { isAuthenticated, init } = useAuthStore();
   const settingsInit = useSettingsStore((s) => s.init);
   const draftsInit = useDraftsStore((s) => s.init);
+  const configLoad = useConfigStore((s) => s.load);
   const segments = useSegments();
   const router = useRouter();
   const { isDark, colors } = useTheme();
@@ -21,7 +23,8 @@ export default function RootLayout() {
     init();
     settingsInit();
     draftsInit();
-  }, [init, settingsInit, draftsInit]);
+    configLoad();
+  }, [init, settingsInit, draftsInit, configLoad]);
 
   // Auth Gate: 在 useEffect 中导航，避免渲染期 Redirect 导致
   // "Attempted to navigate before mounting Root Layout" 错误
@@ -61,10 +64,6 @@ export default function RootLayout() {
         <Stack.Screen
           name="compose/preview"
           options={{ title: '预览与上传' }}
-        />
-        <Stack.Screen
-          name="news/publish"
-          options={{ title: '新闻发布' }}
         />
         <Stack.Screen
           name="settings"

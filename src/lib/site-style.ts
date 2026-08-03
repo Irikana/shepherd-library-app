@@ -24,13 +24,13 @@ export function getSiteCss(): Promise<string | null> {
 
 /**
  * 构建带网站样式的预览 HTML：
- * - 将 <link rel="stylesheet" href="../../css/style.css"> 替换为内联 <style>
+ * - 将 <link rel="stylesheet" href="../../css/style.css">（或更深层 ../ 前缀）替换为内联 <style>
  * - 相对路径资源（图片等）由 WebView 的 baseUrl 解析（见 HtmlPreview）
  */
 export function buildPreviewHtml(html: string, css: string | null): string {
   if (!css) return html;
   return html.replace(
-    '<link rel="stylesheet" href="../../css/style.css">',
+    /<link rel="stylesheet" href="(?:\.\.\/)+css\/style\.css">/,
     `<style>\n${css}\n</style>`,
   );
 }

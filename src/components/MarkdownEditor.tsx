@@ -212,6 +212,8 @@ export function MarkdownEditor({
   const scrollRef = React.useRef<ScrollView>(null);
   const restoredRef = React.useRef(false);
   const [symbolsVisible, setSymbolsVisible] = useState(false);
+  // 正文高度随内容增长：让外层 ScrollView 真正可滚动（修复 Android 嵌套滚动失效）
+  const [inputHeight, setInputHeight] = useState(240);
 
   // 锁定状态下只读（防误触）
   const lockedBody = locked.body;
@@ -319,9 +321,10 @@ export function MarkdownEditor({
       >
         <TextInput
           ref={inputRef}
-          style={s.editor}
+          style={[s.editor, { height: inputHeight }]}
           value={form.bodyMarkdown}
           onChangeText={(v) => setField('bodyMarkdown', v)}
+          onContentSizeChange={(e) => setInputHeight(Math.max(240, e.nativeEvent.contentSize.height))}
           onSelectionChange={(e) => {
             selectionRef.current = {
               start: e.nativeEvent.selection.start,
@@ -405,7 +408,6 @@ const createStyles = (COLORS: Palette) =>
     toolText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
     scrollArea: { flex: 1 },
     editor: {
-      flexGrow: 1,
       padding: SPACING.md,
       fontSize: FONT.size,
       fontFamily: FONT.mono,
@@ -413,7 +415,6 @@ const createStyles = (COLORS: Palette) =>
       color: COLORS.text,
       backgroundColor: COLORS.bg,
       textAlignVertical: 'top',
-      minHeight: 200,
     },
     counter: {
       textAlign: 'right',

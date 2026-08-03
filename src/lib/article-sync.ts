@@ -27,6 +27,72 @@ export function defaultCategoryForType(articleType: string): ArticleCategory {
   return ARTICLE_CATEGORIES.find((c) => c.key === 'normal')!;
 }
 
+// ──────────────────────────────────────────────
+// 自定义分类：library.html 章节插入 / 移除
+// ──────────────────────────────────────────────
+
+/** 中文版（library/library.html）与英文版（en/library/library.html）的章节尾标记 */
+const ZH_TAIL = '\n        </div>\n      </div>\n    </div>\n  </main>';
+const EN_TAIL = '\n      </div>\n    </div>\n  </div>\n</main>';
+
+/**
+ * 在 library.html 的文章分类列表末尾插入一个自定义分类章节
+ * 中文版与英文版结构不同，分别匹配各自尾标记
+ */
+export function insertCategorySection(
+  html: string,
+  category: ArticleCategory,
+  english = false,
+): string {
+  const anchor = english ? category.enAnchor : category.anchor;
+  const sectionId = `section-3-c-${category.key}`;
+  const section = english
+    ? `
+        <h4 id="${sectionId}" class="subsection-header">${anchor}</h4>
+        <div class="gjs-row bg-transparent content-bg-white-sub">
+          <div class="gjs-cell">
+            <div class="center-align">
+              <p>${anchor}</p>
+              <ul class="article-list">
+              </ul>
+            </div>
+          </div>
+        </div>`
+    : `
+          <h4 id="${sectionId}" class="subsection-header">${anchor}</h4>
+          <div class="section-content">
+            <p>${anchor}</p>
+            <ul class="article-list">
+            </ul>
+          </div>`;
+  const tail = english ? EN_TAIL : ZH_TAIL;
+  const idx = html.lastIndexOf(tail);
+  if (idx < 0) return html;
+  return html.slice(0, idx) + section + html.slice(idx);
+}
+
+/**
+ * 从 library.html 移除一个自定义分类章节（找不到时返回原样）
+ * 中文版章节在 10 空格缩进的 `</div>` 处闭合；英文版在 8 空格缩进的 `</div>` 处闭合
+ */
+export function removeCategorySection(
+  html: string,
+  category: ArticleCategory,
+  english = false,
+): string {
+  const anchor = english ? category.enAnchor : category.anchor;
+  const closeIndent = english ? '        ' : '          ';
+  const re = new RegExp(
+    `<h4[^>]*>${escapeRegExp(anchor)}</h4>[\\s\\S]*?\\n${closeIndent}</div>`,
+  );
+  return html.replace(re, '');
+}
+
+/** 正则转义（分类锚点含中文/括号等） */
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** JS 字符串上下文转义（library-dynamic.js 的 Search.data 条目） */
 function escapeJsString(str: string): string {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ');
@@ -56,14 +122,17 @@ export function insertSearchEntry(
 
 /**
  * 构建搜索关键词：中文标题 + 英文标题 + 文章性质 + 标签
+ * 新闻文章自动加入「新闻」关键词
  */
 export function buildSearchKeywords(form: {
   title: string;
   titleEn: string;
   articleType: string;
   tags: string[];
+  isNews?: boolean;
 }): string {
-  return [form.title, form.titleEn, form.articleType, ...(form.tags ?? [])]
+  const extras = form.isNews ? ['新闻'] : [];
+  return [form.title, form.titleEn, form.articleType, ...(form.tags ?? []), ...extras]
     .filter((s) => !!s && s !== '无')
     .join(' ');
 }

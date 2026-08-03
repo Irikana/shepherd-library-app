@@ -3,14 +3,13 @@ import React, { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
+import { useConfigStore } from '../store/config-store';
 import { DatePickerModal } from './DatePickerModal';
 import { TimePickerModal } from './TimePickerModal';
-import { ARTICLE_CATEGORIES } from '../lib/article-sync';
-import type { ArticleTagName, ArticleType } from '../types';
+import type { ArticleType } from '../types';
 
 /** 文章性质（区别于文章分类：library/ 下每个子目录是一个分类） */
 const ARTICLE_TYPES: ArticleType[] = ['录音文章', '手写文章', '信息文章', '实验性文章'];
-const ALL_TAGS: ArticleTagName[] = ['新闻', '小说', '包含AI', '有删减', '无'];
 
 interface MetaFormProps {
   /** 可选：新闻发布页的附加区块 */
@@ -23,6 +22,9 @@ interface MetaFormProps {
 
 export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
   const { form, setField, toggleTag, setArticleType, locked } = useComposeStore();
+  // 分类与标签支持用户自定义（配置同步自仓库 slywrite-config.json）
+  const categories = useConfigStore((s) => s.categories);
+  const allTags = useConfigStore((s) => s.tags);
   const { colors } = useTheme();
   const s = createStyles(colors);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -142,7 +144,7 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
       {/* 文章分类 */}
       <Text style={s.label}>文章分类 *</Text>
       <View style={s.chipRow}>
-        {ARTICLE_CATEGORIES.map((c) => {
+        {categories.map((c) => {
           const active = form.category === c.key;
           return (
             <Pressable
@@ -157,6 +159,33 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
         })}
       </View>
       <Text style={s.hint}>上传到 library/ 下对应分类目录（普通/作品/杂物/测试文章）</Text>
+
+      {/* 在新闻板块展示（合并文章与新闻撰写） */}
+      <View style={s.switchRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.label}>在新闻板块展示</Text>
+          <Text style={s.hint}>开启后自动添加「新闻」标签，并在发布时同步主页新闻区 / news.html / 英文主页；文章固定发布到普通文章（library/paper/）</Text>
+        </View>
+        <Switch
+          value={form.isNews}
+          onValueChange={(v) => {
+            setField('isNews', v);
+            const tags = [...form.tags];
+            const hasNews = tags.includes('新闻');
+            if (v && !hasNews) {
+              // 开启：强制普通文章分类 + 补上「新闻」标签
+              setField('category', 'normal');
+              setField('tags', [...tags.filter((t) => t !== '无'), '新闻']);
+            } else if (!v && hasNews) {
+              // 关闭：移除「新闻」标签
+              const next = tags.filter((t) => t !== '新闻');
+              setField('tags', next.length ? next : ['无']);
+            }
+          }}
+          trackColor={{ false: colors.border, true: colors.accent }}
+          disabled={lockedMeta}
+        />
+      </View>
 
       {/* 录音时长（条件） */}
       {form.articleType === '录音文章' && (
@@ -186,7 +215,7 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
       {/* 标签 */}
       <Text style={s.label}>标签</Text>
       <View style={s.chipRow}>
-        {ALL_TAGS.map((tag) => {
+        {allTags.map((tag) => {
           const active = form.tags.includes(tag);
           return (
             <Pressable
@@ -196,7 +225,8 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
                 active && tag === '新闻' && s.chipNews,
                 active && tag === '包含AI' && s.chipAi,
                 active && tag === '有删减' && s.chipEdited,
-                active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && s.chipActive,
+                active && tag === '小说' && s.chipNovel,
+                active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && tag !== '小说' && s.chipActive,
                 lockedMeta && s.btnDisabled,
               ]}
               onPress={() => toggleTag(tag)}
@@ -208,7 +238,8 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
                   active && tag === '新闻' && s.chipTextNews,
                   active && tag === '包含AI' && s.chipTextAi,
                   active && tag === '有删减' && s.chipTextEdited,
-                  active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && s.chipTextActive,
+                  active && tag === '小说' && s.chipTextNovel,
+                  active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && tag !== '小说' && s.chipTextActive,
                 ]}
               >
                 {tag}
@@ -364,11 +395,13 @@ const createStyles = (COLORS: Palette) =>
     chipNews: { borderColor: COLORS.tagNewsBorder, backgroundColor: COLORS.tagNewsBg },
     chipAi: { borderColor: COLORS.warning, backgroundColor: COLORS.tagAiBg },
     chipEdited: { borderColor: COLORS.danger, backgroundColor: COLORS.tagEditedBg },
+    chipNovel: { borderColor: COLORS.tagNovelBorder, backgroundColor: COLORS.tagNovelBg },
     chipText: { fontSize: 13, color: COLORS.textSecondary },
     chipTextActive: { color: '#fff', fontWeight: '600' },
     chipTextNews: { color: COLORS.tagNewsText, fontWeight: '600' },
     chipTextAi: { color: COLORS.tagAiText, fontWeight: '600' },
     chipTextEdited: { color: COLORS.tagEditedText, fontWeight: '600' },
+    chipTextNovel: { color: COLORS.tagNovelText, fontWeight: '600' },
     footnoteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.xs, marginTop: SPACING.xs },
     footnoteIndex: {
       fontSize: 14,

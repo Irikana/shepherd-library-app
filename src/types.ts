@@ -1,13 +1,16 @@
 // 牧羊人图书馆 App - 共享类型定义
 
-/** 撰写会话类型：普通文章 / 新闻（决定草稿恢复时跳转的页面） */
+/** 撰写会话类型：普通文章 / 新闻（旧草稿兼容标记；0.0.7 起撰写统一入口，新闻为元数据选项） */
 export type ComposeKind = 'article' | 'news';
 
 /** 文章性质（录音/手写/信息/实验性），区别于文章分类（library/ 下目录） */
 export type ArticleType = '录音文章' | '手写文章' | '信息文章' | '实验性文章';
 
-/** 文章属性标签 */
+/** 内置文章属性标签（此外支持用户自定义标签） */
 export type ArticleTagName = '新闻' | '小说' | '包含AI' | '有删减' | '无';
+
+/** 新闻形态（文章在新闻板块展示时的形态） */
+export type NewsKind = 'text' | 'poster';
 
 export interface ArticleFormData {
   title: string;
@@ -16,7 +19,8 @@ export interface ArticleFormData {
   author: string;
   createDate: string; // YYYY-MM-DD
   articleType: ArticleType;
-  tags: ArticleTagName[];
+  /** 标签（内置 + 自定义；「无」为特殊占位，选择后清空其他） */
+  tags: string[];
   recordingDuration?: string; // 仅录音文章
   bodyMarkdown: string;
   footerNote?: string;
@@ -25,6 +29,8 @@ export interface ArticleFormData {
   includeMathJax: boolean;
   /** 文章分类（library/ 下目录的 key，见 src/lib/article-sync.ts 的 ARTICLE_CATEGORIES） */
   category: string;
+  /** 是否在新闻板块展示（合并文章/新闻撰写：新闻仅是多一个展示选项 + 新闻标签） */
+  isNews: boolean;
   /** 隐藏文章：不同步 library.html 与新闻等公开列表，仅加入站内搜索数据（只能通过查找按钮找到） */
   hidden: boolean;
 }

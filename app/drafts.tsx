@@ -25,10 +25,13 @@ export default function DraftsScreen() {
   const resume = (id: string) => {
     const draft = useDraftsStore.getState().drafts.find((d) => d.id === id);
     if (!draft) return;
-    // 新闻草稿恢复到新闻发布页，普通文章草稿恢复到撰写文章页
-    const kind = draft.kind === 'news' ? 'news' : 'article';
-    useComposeStore.getState().loadDraft(draft.id, draft.form, kind);
-    router.push(kind === 'news' ? '/news/publish' : '/compose/article');
+    // 0.0.7 起文章与新闻统一到撰写页：旧新闻草稿（kind='news'）恢复时自动开启「在新闻板块展示」
+    const form =
+      draft.kind === 'news' && !draft.form.isNews
+        ? { ...draft.form, isNews: true, category: 'normal' }
+        : draft.form;
+    useComposeStore.getState().loadDraft(draft.id, form, 'article');
+    router.push('/compose/article');
   };
 
   const remove = (id: string, title: string) => {

@@ -30,6 +30,9 @@ export interface Palette {
   tagNewsBg: string;
   tagNewsBorder: string;
   tagNewsText: string;
+  tagNovelBg: string;
+  tagNovelBorder: string;
+  tagNovelText: string;
 }
 
 /** 浅色色板（对齐网站扁平化设计：无圆角） */
@@ -57,6 +60,9 @@ export const LIGHT_PALETTE: Palette = {
   tagNewsBg: 'rgba(41,128,185,0.14)',
   tagNewsBorder: '#a8cfeb',
   tagNewsText: '#2980b9',
+  tagNovelBg: '#f3e8fd',
+  tagNovelBorder: '#d7b8ec',
+  tagNovelText: '#7d3c98',
 } as const;
 
 /** 深色色板 */
@@ -84,6 +90,9 @@ export const DARK_PALETTE: Palette = {
   tagNewsBg: 'rgba(93,156,204,0.22)',
   tagNewsBorder: '#5d9ccc',
   tagNewsText: '#8ab4d8',
+  tagNovelBg: 'rgba(178,140,220,0.22)',
+  tagNovelBorder: '#8e6bb3',
+  tagNovelText: '#c9a7e0',
 };
 
 /**

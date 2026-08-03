@@ -1,6 +1,9 @@
 // 更新检查：从 GitHub Releases 获取最新版本与 APK 下载链接
-// 公开仓库无需 Token；无 release 时返回 null（404）
-import { REPO_CONFIG } from './config';
+// 公开仓库无需 Token，但已登录时带上 Token 可显著提升速率限制（未认证 60 次/时，易触发 403）
+// 取版本方式：拉取 releases 列表，按版本号比较取最大（而非依赖 /releases/latest 的返回顺序，
+// 避免历史归档 release 因发布时间较晚而抢占"最新"）
+import { GITHUB_API, REPO_CONFIG } from './config';
+import { getToken } from './auth';
 
 export interface ReleaseAsset {
   name: string;
@@ -16,7 +19,7 @@ export interface ReleaseInfo {
   assets: ReleaseAsset[];
 }
 
-export const LATEST_RELEASE_URL = `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases/latest`;
+export const LATEST_RELEASE_URL = `${GITHUB_API}/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases/latest`;
 
 /** 直接下载最新 APK 的固定链接（GitHub 会自动跳转到最新 release 的该 asset） */
 export const LATEST_APK_URL = `https://github.com/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases/latest/download/app-release.apk`;
@@ -24,25 +27,58 @@ export const LATEST_APK_URL = `https://github.com/${REPO_CONFIG.owner}/${REPO_CO
 /** SlyWrite 官网（牧羊人图书馆网站上的项目页） */
 export const SLYWRITE_SITE_URL = 'https://irikana.github.io/slywrite/';
 
-/** 获取最新 release；仓库无 release 时返回 null */
-export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
-  const res = await fetch(LATEST_RELEASE_URL, {
-    headers: { Accept: 'application/vnd.github+json' },
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`获取更新失败（HTTP ${res.status}）`);
-  const data = await res.json();
+interface RawRelease {
+  tag_name: string;
+  name: string;
+  published_at: string;
+  html_url: string;
+  body: string | null;
+  draft: boolean;
+  assets: { name: string; browser_download_url: string }[];
+}
+
+function mapRelease(data: RawRelease): ReleaseInfo {
   return {
     tagName: data.tag_name,
     name: data.name,
     publishedAt: data.published_at,
     htmlUrl: data.html_url,
     body: data.body ?? '',
-    assets: (data.assets ?? []).map((a: { name: string; browser_download_url: string }) => ({
+    assets: (data.assets ?? []).map((a) => ({
       name: a.name,
       browser_download_url: a.browser_download_url,
     })),
   };
+}
+
+/** 获取最新 release；仓库无 release 时返回 null */
+export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
+  const token = await getToken();
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  // 方式一：列表接口 → 过滤 draft → 按版本号取最大（最稳妥）
+  const listRes = await fetch(
+    `${GITHUB_API}/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.repo}/releases?per_page=10`,
+    { headers },
+  );
+  if (listRes.ok) {
+    const list: RawRelease[] = await listRes.json();
+    const releases = (list ?? []).filter((r) => !r.draft).map(mapRelease);
+    if (releases.length === 0) return null;
+    return releases.reduce((best, r) =>
+      compareVersions(r.tagName, best.tagName) > 0 ? r : best,
+    );
+  }
+  if (listRes.status === 404) return null;
+
+  // 方式二：latest 端点兜底（列表接口异常时）
+  const res = await fetch(LATEST_RELEASE_URL, { headers });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`获取更新失败（HTTP ${res.status}）`);
+  return mapRelease((await res.json()) as RawRelease);
 }
 
 /** 简单版本比较：v0.0.4 > v0.0.3 */

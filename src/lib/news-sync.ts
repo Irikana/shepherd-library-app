@@ -1,0 +1,79 @@
+// 新闻板块同步：文章在新闻板块展示时，同步 index.html 新闻区 / news.html / en/index.html
+// 0.0.7：合并文章与新闻撰写后，由统一的文章上传流程在 form.isNews 时调用
+import { getFile, putFile } from './github-client';
+import { insertTextCard, replacePosterAndDemote } from '../templates/news-card';
+import { insertNewsListItem } from '../templates/news-list-item';
+import type { NewsKind } from '../types';
+
+export interface NewsSyncOptions {
+  title: string;
+  titleEn: string;
+  date: string; // YYYY-MM-DD
+  kind: NewsKind;
+  posterPath?: string; // image/poster/xxx.png（海报新闻时）
+}
+
+/**
+ * 同步新闻板块（主页新闻区 / news.html / 英文主页）
+ * 各步骤独立 try/catch，单步失败不阻塞其余步骤；返回步骤说明
+ */
+export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]> {
+  const steps: string[] = [];
+  const { title, titleEn, date, kind, posterPath } = opts;
+  const href = `./library/paper/${titleEn}.html`;
+  const enHref = `../library/paper/${titleEn}.html`;
+
+  // 1. 主页新闻区（中文）
+  try {
+    const { content, sha } = await getFile('index.html');
+    const card = { title, date, href };
+    const updated =
+      kind === 'poster' && posterPath
+        ? replacePosterAndDemote(content, {
+            ...card,
+            posterSrc: `./${posterPath}`,
+            alt: title,
+          })
+        : insertTextCard(content, card);
+    if (updated !== content) {
+      await putFile('index.html', updated, { sha, message: `新闻同步：${title}（移动端 App）` });
+      steps.push('index.html 新闻区已更新');
+    }
+  } catch {
+    steps.push('index.html 更新失败（可手动添加）');
+  }
+
+  // 2. news.html 列表
+  try {
+    const { content, sha } = await getFile('news.html');
+    const updated = insertNewsListItem(content, { title, date, href });
+    if (updated !== content) {
+      await putFile('news.html', updated, { sha, message: `新闻同步：${title}（移动端 App）` });
+      steps.push('news.html 已更新');
+    }
+  } catch {
+    steps.push('news.html 更新失败（可手动添加）');
+  }
+
+  // 3. 英文主页（卡片标题用英文标题）
+  try {
+    const { content, sha } = await getFile('en/index.html');
+    const enCard = { title: titleEn, date, href: enHref };
+    const updated =
+      kind === 'poster' && posterPath
+        ? replacePosterAndDemote(content, {
+            ...enCard,
+            posterSrc: `../${posterPath}`,
+            alt: titleEn,
+          })
+        : insertTextCard(content, enCard);
+    if (updated !== content) {
+      await putFile('en/index.html', updated, { sha, message: `News sync: ${titleEn} (mobile app)` });
+      steps.push('en/index.html 已更新');
+    }
+  } catch {
+    steps.push('en/index.html 更新失败（可手动添加）');
+  }
+
+  return steps;
+}

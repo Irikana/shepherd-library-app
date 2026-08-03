@@ -1,11 +1,14 @@
-// 撰写文章页：元数据表单 + Markdown 编辑器（分段切换）+ 草稿自动保存 + 分页锁定
+// 撰写页（文章与新闻合并入口）：元数据表单 + Markdown 编辑器（分段切换）+ 草稿自动保存 + 分页锁定
+// 0.0.7：新闻不再是独立入口——「在新闻板块展示」成为元数据选项，开启后可选文字/海报形态与海报图
 // 锁定：每个标签页可单独锁定（编辑元数据时锁定正文可放心查看，反之亦然），锁定后表单只读防误触
-import React, { useEffect, useState } from 'react';
-import { Alert, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { MetaForm } from '../../src/components/MetaForm';
 import { MarkdownEditor } from '../../src/components/MarkdownEditor';
 import { useComposeStore } from '../../src/store/compose-store';
+import { useConfigStore } from '../../src/store/config-store';
 import { useDraftsStore } from '../../src/store/drafts-store';
 import { generateArticleHtml } from '../../src/templates/article';
 import { validateArticleHtml } from '../../src/templates/validators';
@@ -14,13 +17,73 @@ import { SPACING, useTheme, type Palette } from '../../src/theme';
 
 type Tab = 'meta' | 'body';
 
+/** 新闻专属选项：新闻形态 + 海报图片（仅在「在新闻板块展示」开启时显示） */
+function NewsOptions() {
+  const { colors } = useTheme();
+  const s = createStyles(colors);
+  const newsKind = useComposeStore((st) => st.newsKind);
+  const posterUri = useComposeStore((st) => st.posterUri);
+  const setNewsKind = useComposeStore((st) => st.setNewsKind);
+  const setPoster = useComposeStore((st) => st.setPoster);
+
+  /** 选择海报：原图直接读取 base64，不压缩 */
+  const pickPoster = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+        base64: true,
+      });
+      if (res.canceled || !res.assets?.length) {
+        return; // 用户取消，不算失败
+      }
+      const asset = res.assets[0];
+      if (!asset.base64) {
+        Alert.alert('选图失败', '未能读取所选图片的数据，请换一张图片重试。');
+        return;
+      }
+      setPoster(asset.uri, asset.base64);
+    } catch (err) {
+      Alert.alert('选图失败', `无法读取所选图片，请重试。\n\n${(err as Error).message}`);
+    }
+  };
+
+  return (
+    <>
+      <Text style={s.label}>新闻形态</Text>
+      <View style={s.chipRow}>
+        <Pressable style={[s.chip, newsKind === 'text' && s.chipActive]} onPress={() => setNewsKind('text')}>
+          <Text style={[s.chipText, newsKind === 'text' && s.chipTextActive]}>文字新闻</Text>
+        </Pressable>
+        <Pressable style={[s.chip, newsKind === 'poster' && s.chipActive]} onPress={() => setNewsKind('poster')}>
+          <Text style={[s.chipText, newsKind === 'poster' && s.chipTextActive]}>海报新闻</Text>
+        </Pressable>
+      </View>
+
+      {newsKind === 'poster' && (
+        <>
+          <Text style={s.label}>海报图片</Text>
+          {posterUri && (
+            <Image source={{ uri: posterUri }} style={s.posterPreview} resizeMode="contain" />
+          )}
+          <Pressable style={s.pickBtn} onPress={pickPoster}>
+            <Text style={s.pickBtnText}>{posterUri ? '重新选择海报' : '选择海报图片'}</Text>
+          </Pressable>
+          <Text style={s.hint}>原图上传到 image/poster/，不压缩；建议使用宽 800px 以上的图片</Text>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function ComposeArticleScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [tab, setTab] = useState<Tab>('meta');
-  const [preparing, setPreparing] = useState(false);
+  const [tab, setTab] = React.useState<Tab>('meta');
+  const [preparing, setPreparing] = React.useState(false);
   const { form, locked, scrollPositions, setGeneratedHtml, draftId, startDraft, toggleLock, setScrollPosition } =
     useComposeStore();
+  const categories = useConfigStore((s) => s.categories);
   const s = createStyles(colors);
 
   // 进入撰写页：无草稿上下文时生成新草稿 id（此后编辑会自动保存）
@@ -67,7 +130,13 @@ export default function ComposeArticleScreen() {
       Alert.alert('正文不能为空');
       return;
     }
-    const html = generateArticleHtml(form);
+    if (form.isNews && useComposeStore.getState().newsKind === 'poster' && !useComposeStore.getState().posterBase64) {
+      Alert.alert('请选择海报图片', '海报新闻需要一张海报图片。');
+      return;
+    }
+    // 按所选分类目录生成（深层目录会自动调整相对路径前缀）
+    const category = categories.find((c) => c.key === form.category) ?? categories[0];
+    const html = generateArticleHtml(form, category.dir);
     const result = validateArticleHtml(html);
     if (!result.valid) {
       Alert.alert(
@@ -137,6 +206,7 @@ export default function ComposeArticleScreen() {
           <MetaForm
             scrollPosition={scrollPositions.meta}
             onScroll={(y) => setScrollPosition('meta', y)}
+            extra={form.isNews ? <NewsOptions /> : undefined}
           />
         </View>
         <View style={[s.page, tab !== 'body' && s.pageHidden]}>
@@ -188,6 +258,41 @@ const createStyles = (COLORS: Palette) =>
     content: { flex: 1 },
     page: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.bg },
     pageHidden: { display: 'none' },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: COLORS.textSecondary,
+      marginTop: SPACING.md,
+      marginBottom: SPACING.xs,
+    },
+    hint: { fontSize: 12, color: COLORS.textLight, marginTop: 4, lineHeight: 17 },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+    chip: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+      backgroundColor: COLORS.bg,
+    },
+    chipActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent },
+    chipText: { fontSize: 13, color: COLORS.textSecondary },
+    chipTextActive: { color: '#fff', fontWeight: '600' },
+    posterPreview: {
+      width: '100%',
+      height: 140,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+      marginBottom: SPACING.xs,
+    },
+    pickBtn: {
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      padding: SPACING.sm + 2,
+      alignItems: 'center',
+      backgroundColor: COLORS.bgSubtle,
+    },
+    pickBtnText: { fontSize: 13, color: COLORS.accent, fontWeight: '600' },
     footer: {
       borderTopWidth: 1,
       borderColor: COLORS.border,

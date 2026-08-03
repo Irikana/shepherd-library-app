@@ -52,14 +52,8 @@ export default function HomeScreen() {
   const FEATURES: FeatureItem[] = [
     {
       title: '撰写文章',
-      desc: '双标题 + Markdown 编辑器，生成合规 HTML 后分类上传，并自动同步 library.html',
+      desc: '双标题 + Markdown 编辑器，生成合规 HTML 后分类上传；支持在新闻板块展示（含海报）',
       href: '/compose/article',
-      enabled: true,
-    },
-    {
-      title: '新闻发布',
-      desc: '撰写新闻并同步主页新闻区、news.html 与英文主页',
-      href: '/news/publish',
       enabled: true,
     },
     {

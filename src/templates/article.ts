@@ -1,7 +1,8 @@
 // 文章页 HTML 模板生成器
 // 以 library/paper/ 下实际文章页结构为权威参考，产出完整可部署的 HTML
+// 0.0.7：相对路径随分类目录深度自适应（修复 misc/experimental 等深层目录下 CSS/JS/图片失效）
 import { marked } from 'marked';
-import type { ArticleFormData, ArticleTagName } from '../types';
+import type { ArticleFormData } from '../types';
 
 /** 将 YYYY-MM-DD 格式化为 YYYY年M月D日 */
 export function formatDateCN(dateStr: string): string {
@@ -19,14 +20,15 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** 渲染标签 spans */
-function renderTags(tags: ArticleTagName[]): string {
+/** 渲染标签 spans（内置标签带专属类名，自定义标签用通用样式） */
+function renderTags(tags: string[]): string {
   if (!tags.length) return '<span class="article-tag">无</span>';
   return tags
     .map((tag) => {
       if (tag === '包含AI') return '<span class="article-tag tag-ai">包含AI</span>';
       if (tag === '有删减') return '<span class="article-tag tag-edited">有删减</span>';
-      return `<span class="article-tag">${tag}</span>`;
+      if (tag === '小说') return '<span class="article-tag tag-novel">小说</span>';
+      return `<span class="article-tag">${escapeHtml(tag)}</span>`;
     })
     .join('\n        ');
 }
@@ -39,8 +41,8 @@ function renderTypeBadge(articleType: string): string {
   return `<span class="article-type-badge">${escapeHtml(articleType)}</span>`;
 }
 
-/** 文章页内联脚本块（各页相同，仅 PAGE_DISPLAY_NAME 不同） */
-const ARTICLE_SCRIPT = (displayName: string) => {
+/** 文章页内联脚本块（各页相同，仅 PAGE_DISPLAY_NAME 与根前缀不同） */
+const ARTICLE_SCRIPT = (displayName: string, rootPrefix: string) => {
   // JS 字符串上下文转义：防 </script> 提前终止、防单引号破坏字符串
   const safeName = displayName.replace(/</g, '\\u003c').replace(/'/g, "\\'");
   return `<script>
@@ -51,7 +53,7 @@ function scrollToTop() {
 }
 
 function openNavigator() {
-  window.open('../../navigator.html', '_blank');
+  window.open('${rootPrefix}navigator.html', '_blank');
 }
 
 function getCurrentPath() {
@@ -145,11 +147,20 @@ MathJax = {
 /**
  * 生成完整的文章页 HTML
  * @param data 表单数据
- * @returns 完整 HTML 字符串（可直接 PUT 到 library/paper/{标题}.html）
+ * @param categoryDir 目标分类目录（相对 library/，如 'paper'、'misc/experimental'）；
+ *                    默认 'paper'。目录越深，相对路径的 ../ 前缀越多
+ * @returns 完整 HTML 字符串（可直接 PUT 到 library/{categoryDir}/{标题}.html）
  */
-export function generateArticleHtml(data: ArticleFormData): string {
+export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'): string {
   const dateCN = formatDateCN(data.createDate);
   const titleSafe = escapeHtml(data.title);
+
+  // 相对路径前缀：
+  // - 站点根级资源（css/logo/index/navigator/js）：'../' × (目录深度 + 1)
+  // - 图书馆级页面（intro/rule/feature，位于 library/ 下）：'../' × 目录深度
+  const depth = (categoryDir || 'paper').split('/').filter(Boolean).length;
+  const rootPrefix = '../'.repeat(depth + 1); // paper → ../../，misc/experimental → ../../../
+  const libPrefix = '../'.repeat(depth); // paper → ../，misc/experimental → ../../
 
   // 脚注引用：将正文中的 [^n] 替换为上标可点击引用（链接到页脚解释处）
   // 1) 先保护代码块/行内代码，避免其中的字面 [n] 被误替换
@@ -250,14 +261,14 @@ export function generateArticleHtml(data: ArticleFormData): string {
 <title>牧羊人图书馆 - ${titleSafe}</title>
 <meta name="description" content="牧羊人图书馆 - 存放所有知识之地">
 <meta name="keywords" content="图书馆,知识,学习,牧羊人">
-<link rel="stylesheet" href="../../css/style.css">
+<link rel="stylesheet" href="${rootPrefix}css/style.css">
 ${footnoteStyle}
 ${data.includeMathJax ? MATHJAX_HEAD : ''}
 </head>
 <body>
 <header>
 <div class="gjs-row main-container">
-  <div class="gjs-cell logo-align"><div class="logo-header-row"><img src="../../image/logo.png" class="logo-border logo-container logo-img-custom"><img src="../../image/logo_text.png" class="logo-size logo-size-custom"></div>
+  <div class="gjs-cell logo-align"><div class="logo-header-row"><img src="${rootPrefix}image/logo.png" class="logo-border logo-container logo-img-custom"><img src="${rootPrefix}image/logo_text.png" class="logo-size logo-size-custom"></div>
     <div class="slogan-container">
       <hr class="slogan-line slogan-line-left">
       <span class="slogan-text">存放所有知识之地</span>
@@ -295,11 +306,11 @@ ${metaItems.join('\n')}
 <div class="mobile-nav">
   <div class="mobile-nav-title">便携式导航仪</div>
   <div class="mobile-nav-links">
-    <a href="../../index.html" class="mobile-nav-link">图书馆主页</a>
-    <a href="../intro.html" class="mobile-nav-link">图书馆入门</a>
-    <a href="../rule.html" class="mobile-nav-link">图书馆规则</a>
-    <a href="../feature.html" class="mobile-nav-link">图书馆功能</a>
-    <a href="../../navigator.html" target="_blank" class="mobile-nav-link">导航枢纽</a>
+    <a href="${rootPrefix}index.html" class="mobile-nav-link">图书馆主页</a>
+    <a href="${libPrefix}intro.html" class="mobile-nav-link">图书馆入门</a>
+    <a href="${libPrefix}rule.html" class="mobile-nav-link">图书馆规则</a>
+    <a href="${libPrefix}feature.html" class="mobile-nav-link">图书馆功能</a>
+    <a href="${rootPrefix}navigator.html" target="_blank" class="mobile-nav-link">导航枢纽</a>
   </div>
 </div>
 
@@ -307,10 +318,10 @@ ${metaItems.join('\n')}
   <div class="quick-nav-title">便携式导航仪</div>
   <div class="quick-nav-hint">光标移到此处展开</div>
   <div class="quick-nav-content">
-    <a href="../../index.html" class="quick-nav-item">图书馆主页</a>
-    <a href="../intro.html" class="quick-nav-item">图书馆入门</a>
-    <a href="../rule.html" class="quick-nav-item">图书馆规则</a>
-    <a href="../feature.html" class="quick-nav-item">图书馆功能</a>
+    <a href="${rootPrefix}index.html" class="quick-nav-item">图书馆主页</a>
+    <a href="${libPrefix}intro.html" class="quick-nav-item">图书馆入门</a>
+    <a href="${libPrefix}rule.html" class="quick-nav-item">图书馆规则</a>
+    <a href="${libPrefix}feature.html" class="quick-nav-item">图书馆功能</a>
   </div>
 </div>
 
@@ -322,8 +333,8 @@ ${metaItems.join('\n')}
   导航<br>枢纽
 </button>
 
-${ARTICLE_SCRIPT(data.title)}
-<script src="../../js/library-dynamic.js"></script>
+${ARTICLE_SCRIPT(data.title, rootPrefix)}
+<script src="${rootPrefix}js/library-dynamic.js"></script>
 </body>
 </html>
 `;
