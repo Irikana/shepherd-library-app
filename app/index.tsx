@@ -1,5 +1,5 @@
 // 首页：功能入口卡片 + 版本号 + 速率限制 + 设置入口
-import React, { useState } from 'react';
+import React from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -41,11 +41,9 @@ function confirmDialog(
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { login, version, logout, refreshVersion } = useAuthStore();
+  const { login, logout } = useAuthStore();
   const { isDark, colors } = useTheme();
   const s = createStyles(colors);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
 
   const draftCount = useDraftsStore((st) => st.drafts.length);
 
@@ -87,27 +85,6 @@ export default function HomeScreen() {
     confirmDialog('退出登录', '确定要退出吗？Token 将从本机清除。', () => logout());
   };
 
-  const handleRefreshVersion = async () => {
-    setRefreshing(true);
-    setRefreshMsg(null);
-    try {
-      await refreshVersion();
-      // refreshVersion 成功时不报错，检查 version 是否更新
-      const currentVersion = useAuthStore.getState().version;
-      if (currentVersion) {
-        setRefreshMsg(`已刷新：${currentVersion}`);
-      } else {
-        setRefreshMsg('版本号暂未获取到');
-      }
-    } catch {
-      setRefreshMsg('刷新失败，请检查网络');
-    } finally {
-      setRefreshing(false);
-      // 3 秒后清除提示
-      setTimeout(() => setRefreshMsg(null), 3000);
-    }
-  };
-
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* 品牌区 */}
@@ -145,10 +122,6 @@ export default function HomeScreen() {
           <Text style={s.statusLabel}>已登录</Text>
           <Text style={s.statusValue}>{login}</Text>
         </View>
-        <View style={s.versionBox}>
-          <Text style={s.versionLabel}>网站版本</Text>
-          <Text style={s.versionValue}>{version ?? '—'}</Text>
-        </View>
       </View>
 
       {/* 速率限制 */}
@@ -158,13 +131,6 @@ export default function HomeScreen() {
             API 速率剩余 {rateLimit.state.remaining}，重置于{' '}
             {rateLimit.resetDate?.toLocaleTimeString() ?? '稍后'}
           </Text>
-        </View>
-      )}
-
-      {/* 刷新反馈 */}
-      {refreshMsg && (
-        <View style={s.refreshMsgBox}>
-          <Text style={s.refreshMsgText}>{refreshMsg}</Text>
         </View>
       )}
 
@@ -186,13 +152,6 @@ export default function HomeScreen() {
 
       {/* 操作 */}
       <View style={s.actions}>
-        <Pressable
-          style={[s.refreshBtn, refreshing && s.btnDisabled]}
-          onPress={handleRefreshVersion}
-          disabled={refreshing}
-        >
-          <Text style={s.refreshText}>{refreshing ? '刷新中…' : '刷新版本号'}</Text>
-        </Pressable>
         <Pressable style={s.logoutBtn} onPress={handleLogout}>
           <Text style={s.logoutText}>退出登录</Text>
         </Pressable>
@@ -243,9 +202,6 @@ const createStyles = (COLORS: Palette) =>
     },
     statusLabel: { fontSize: 12, color: COLORS.textLight },
     statusValue: { fontSize: 15, color: COLORS.accent, fontWeight: '600', marginTop: 2 },
-    versionBox: { alignItems: 'flex-end' },
-    versionLabel: { fontSize: 12, color: COLORS.textLight },
-    versionValue: { fontSize: 16, color: COLORS.accent, fontWeight: '700', marginTop: 2 },
     rateWarn: {
       backgroundColor: COLORS.dangerBg,
       borderLeftWidth: 4,
@@ -254,14 +210,6 @@ const createStyles = (COLORS: Palette) =>
       marginBottom: SPACING.md,
     },
     rateWarnText: { fontSize: 13, color: COLORS.danger },
-    refreshMsgBox: {
-      backgroundColor: COLORS.infoBg,
-      borderLeftWidth: 4,
-      borderLeftColor: COLORS.accentLight,
-      padding: SPACING.sm + 2,
-      marginBottom: SPACING.md,
-    },
-    refreshMsgText: { fontSize: 13, color: COLORS.accentLight },
     sectionTitle: {
       fontSize: 14,
       fontWeight: '600',
@@ -292,14 +240,6 @@ const createStyles = (COLORS: Palette) =>
     },
     actions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.lg },
     btnDisabled: { opacity: 0.5 },
-    refreshBtn: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: COLORS.accent,
-      padding: SPACING.sm + 2,
-      alignItems: 'center',
-    },
-    refreshText: { color: COLORS.accent, fontWeight: '600', fontSize: 14 },
     logoutBtn: {
       borderWidth: 1,
       borderColor: COLORS.danger,

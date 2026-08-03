@@ -76,7 +76,8 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   load: (path, content, sha = null, name) => {
     // 检测是否为文章 HTML，如果是则解析元数据
-    const article = isArticleHtml(content) ? parseArticleMetadata(content, path) : null;
+    // en/ 英文版文章由网站同步生成，元数据结构为英文标签，不做表单编辑（避免误改英文版）
+    const article = !path.startsWith('en/') && isArticleHtml(content) ? parseArticleMetadata(content, path) : null;
     const bodyHtml = article ? extractBodyHtml(content) : null;
     set({
       path,

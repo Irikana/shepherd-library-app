@@ -5,9 +5,13 @@ import type { ArticleFormData, ArticleType } from '../types';
 import { ARTICLE_CATEGORIES } from './article-sync';
 import { formatDateCN } from '../templates/article';
 
-/** 判断 HTML 是否为 App 生成的文章页 */
+/** 判断 HTML 是否为 App 生成的文章页（class token 匹配，兼容 class="section-padding page-title-main" 多类名） */
+function hasClassToken(html: string, token: string): boolean {
+  return new RegExp(`class="[^"]*\\b${token}\\b`).test(html);
+}
+
 export function isArticleHtml(html: string): boolean {
-  return html.includes('class="article-meta"') && html.includes('class="page-title-main"');
+  return hasClassToken(html, 'article-meta') && hasClassToken(html, 'page-title-main');
 }
 
 /** 提取标签内纯文本（去嵌套标签 + trim） */

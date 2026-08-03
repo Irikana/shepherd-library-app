@@ -4,7 +4,6 @@ import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, T
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { fetchLatestRelease, LATEST_APK_URL, SLYWRITE_SITE_URL, compareVersions, type ReleaseInfo } from '../src/lib/releases';
-import { useAuthStore } from '../src/store/auth-store';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
@@ -25,7 +24,6 @@ export default function UpdatesScreen() {
   const [checking, setChecking] = useState(true);
   const [release, setRelease] = useState<ReleaseInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const siteVersion = useAuthStore((st) => st.version);
 
   const check = useCallback(async () => {
     setChecking(true);
@@ -63,14 +61,9 @@ export default function UpdatesScreen() {
           <Text style={s.rowLabel}>App 版本</Text>
           <Text style={s.rowValue}>v{APP_VERSION}</Text>
         </View>
-        <View style={s.row}>
-          <Text style={s.rowLabel}>网站版本</Text>
-          <Text style={s.rowValue}>{siteVersion ?? '—'}</Text>
-        </View>
-        <Text style={s.rowHint}>「网站版本」是牧羊人图书馆网站的动态版本号（alpha-xxx），与 App 更新无关</Text>
       </View>
 
-      {/* 最新版本（App 自身） */}
+      {/* 最新版本（App 自身 Release） */}
       <Text style={s.sectionTitle}>App 最新版本</Text>
       {checking ? (
         <View style={[s.box, s.centerBox]}>
@@ -158,7 +151,6 @@ const createStyles = (COLORS: Palette) =>
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xs },
     rowLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
     rowValue: { fontSize: 15, color: COLORS.text, fontWeight: '700' },
-    rowHint: { fontSize: 11, color: COLORS.textLight, marginTop: SPACING.xs, lineHeight: 16 },
     rowLabelSmall: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.sm },
     rowText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19, marginTop: 2 },
     newerText: { color: COLORS.accent },
