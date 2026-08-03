@@ -117,7 +117,12 @@ export const useComposeStore = create<ComposeState>((set) => ({
     set({
       draftId: id,
       kind,
-      form: { ...defaultForm, ...form },
+      // 清理历史遗留的「无」标签（0.0.12 起「无」不再是标签）
+      form: {
+        ...defaultForm,
+        ...form,
+        tags: (form.tags ?? []).filter((t) => t !== '无'),
+      },
       generatedHtml: null,
       uploadStatus: 'idle',
       uploadError: null,

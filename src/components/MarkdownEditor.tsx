@@ -234,7 +234,10 @@ export function MarkdownEditor({
   const changeText = (t: string) => (onChangeText ? onChangeText(t) : setField('bodyMarkdown', t));
 
   // 锁定状态下只读（防误触）
-  const lockedBody = !editable || locked.body;
+  // 受控模式（编辑已有文章，外部传入 value/onChangeText）以外部 editable 为准；
+  // 撰写模式（compose-store 表单）以 compose 的 locked.body 为准
+  const controlled = value !== undefined && onChangeText !== undefined;
+  const lockedBody = controlled ? !editable : locked.body;
 
   /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
   const applyInsert = (text: string, cursor: number) => {

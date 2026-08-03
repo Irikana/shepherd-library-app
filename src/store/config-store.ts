@@ -66,7 +66,9 @@ function mergeCategories(custom: ArticleCategory[]): ArticleCategory[] {
 }
 
 function mergeTags(custom: string[]): string[] {
-  return [...DEFAULT_TAGS, ...custom.filter((t) => !DEFAULT_TAGS.includes(t))];
+  // 过滤历史遗留的「无」标签（0.0.12 起「无」不再是标签，无标签时页面直接显示"无"字）
+  const cleaned = custom.filter((t) => t !== '无');
+  return [...DEFAULT_TAGS, ...cleaned.filter((t) => !DEFAULT_TAGS.includes(t))];
 }
 
 function mergeUploadDirs(custom: UploadDir[]): UploadDir[] {
