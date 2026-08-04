@@ -170,9 +170,10 @@ export function insertIntoLibraryHtml(
 
 /**
  * 从 library.html 中移除指定文件名的文章链接（用于隐藏文章时同步取消公开列表）
+ * 中文版链接形如 href="paper/xxx.html"，英文版形如 href="../../library/paper/xxx.html"
  * @param html library.html 内容
  * @param category 文章所在分类
- * @param fileName 文件名（含路径前缀，如 paper/xxx.html）
+ * @param fileName 纯文件名（如 xxx.html）
  * @returns 更新后的 HTML
  */
 export function removeFromLibraryHtml(
@@ -180,12 +181,13 @@ export function removeFromLibraryHtml(
   category: ArticleCategory,
   fileName: string,
 ): string {
-  const hrefPattern = `href="${category.dir}/${fileName.split('/').pop()}"`;
-  // 匹配包含该 href 的 <li>…</li> 整行（含前后换行和缩进）
-  return html.replace(
-    new RegExp(`\\n\\s*<li[^>]*>[\\s\\S]*?${escapeRegex(hrefPattern)}[\\s\\S]*?<\\/li>`, 'g'),
-    '',
+  const baseName = fileName.split('/').pop() || fileName;
+  // 匹配中文版 href="paper/xxx.html" 或英文版 href="../../library/paper/xxx.html" 所在 <li>
+  const pattern = new RegExp(
+    `\\n\\s*<li[^>]*>[\\s\\S]*?href="[^"]*${escapeRegex(category.dir)}/${escapeRegex(baseName)}"[\\s\\S]*?<\\/li>`,
+    'g',
   );
+  return html.replace(pattern, '');
 }
 
 function escapeRegex(str: string): string {

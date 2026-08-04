@@ -52,6 +52,8 @@ export default function FileBrowserScreen() {
   const [expanded, setExpanded] = useState<Record<string, TreeNode>>({});
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  /** 正在打开的文件路径（读取中显示加载指示） */
+  const [openingPath, setOpeningPath] = useState<string | null>(null);
 
   /** 加载根目录 */
   useEffect(() => {
@@ -119,15 +121,18 @@ export default function FileBrowserScreen() {
         Alert.alert('无法编辑', '该文件为二进制或非文本类型，暂不支持在线编辑。\n可尝试「图片上传」功能上传图片。');
         return;
       }
+      setOpeningPath(file.path || file.name);
       try {
         const { content } = await getFile(file.path);
         // 先加载内容到 store，再跳转编辑器
         useEditorStore.getState().load(file.path, content, file.sha);
+        setOpeningPath(null);
         router.push({
           pathname: '/editor',
           params: { path: file.path, name: file.name },
         });
       } catch (err) {
+        setOpeningPath(null);
         Alert.alert('读取失败', (err as Error).message);
       }
     },
@@ -160,7 +165,12 @@ export default function FileBrowserScreen() {
             {displayName(item.name)}
           </Text>
           {isDir && node?.loading && <ActivityIndicator size="small" color={colors.accent} />}
-          {!isDir && <Text style={s.rowSize}>{formatSize(item.size)}</Text>}
+          {!isDir && openingPath === (item.path || item.name) && (
+            <ActivityIndicator size="small" color={colors.accent} />
+          )}
+          {!isDir && openingPath !== (item.path || item.name) && (
+            <Text style={s.rowSize}>{formatSize(item.size)}</Text>
+          )}
         </Pressable>
         {isDir && isOpen && (
           <View>

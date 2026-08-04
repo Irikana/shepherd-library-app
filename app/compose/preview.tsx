@@ -23,8 +23,9 @@ import {
   buildSearchKeywords,
   insertIntoLibraryHtml,
   insertSearchEntry,
+  removeFromLibraryHtml,
 } from '../../src/lib/article-sync';
-import { syncNewsSections } from '../../src/lib/news-sync';
+import { removeNewsItem, syncNewsSections } from '../../src/lib/news-sync';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
 
 export default function PreviewScreen() {
@@ -132,7 +133,47 @@ export default function PreviewScreen() {
             }
 
             if (form.hidden) {
-              steps.push('（隐藏文章：未同步公开列表）');
+              // 隐藏文章：主动从公开列表移除（若之前已发布过）
+              steps.push('（隐藏文章：正在从公开列表移除…）');
+              // library.html（中英文）移除
+              try {
+                const { content, sha } = await getFile('library/library.html');
+                const updated = removeFromLibraryHtml(content, category, `${titleEn}.html`);
+                if (updated !== content) {
+                  await putFile('library/library.html', updated, {
+                    sha,
+                    message: `隐藏文章：${title}（移动端 App）`,
+                  });
+                  steps.push('library.html 已移除文章条目');
+                }
+              } catch {
+                steps.push('library.html 移除失败（可手动添加）');
+              }
+              try {
+                const { content, sha } = await getFile('en/library/library.html');
+                const updated = removeFromLibraryHtml(content, category, `${titleEn}.html`);
+                if (updated !== content) {
+                  await putFile('en/library/library.html', updated, {
+                    sha,
+                    message: `Article hidden: ${titleEn} (mobile app)`,
+                  });
+                  steps.push('en/library/library.html 已移除文章条目');
+                }
+              } catch {
+                steps.push('en/library/library.html 移除失败（可手动添加）');
+              }
+              // 新闻板块移除（若是新闻）
+              if (form.isNews) {
+                const newsSteps = await removeNewsItem({
+                  title,
+                  titleEn,
+                  date: form.createDate,
+                  kind: newsKind,
+                  posterPath: posterPath ?? undefined,
+                  categoryDir: category.dir,
+                });
+                steps.push(...newsSteps);
+              }
             } else {
               // 4. 非隐藏文章：同步 library.html 文章列表（中英文）
               try {

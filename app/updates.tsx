@@ -78,28 +78,66 @@ export default function UpdatesScreen() {
     try {
       setDownloading(true);
       setDownloadProgress(0);
-      const url = LATEST_APK_URL;
-      const fileUri = `${FileSystem.cacheDirectory}app-release.apk`;
+      // 优先用具体版本的 asset URL（镜像代理不跟随 /latest 重定向）
+      const apkAsset = appRelease?.assets?.find((a) => a.name === 'app-release.apk');
+      const officialUrl = apkAsset?.browser_download_url || LATEST_APK_URL;
+      // 镜像代理（国内加速），失败回退官方
+      const mirrorUrl = officialUrl.startsWith('https://github.com/')
+        ? `https://ghproxy.com/${officialUrl}`
+        : null;
+      const targetTag = appRelease?.tagName?.replace(/^v/, '') || 'latest';
+      const fileUri = `${FileSystem.cacheDirectory}app-release-${targetTag}.apk`;
 
-      // 清理已有文件
+      // 若已存在同版本安装包（未安装），直接唤起安装界面，不重复下载
       const existing = await FileSystem.getInfoAsync(fileUri);
-      if (existing.exists) {
-        await FileSystem.deleteAsync(fileUri);
+      if (existing.exists && existing.size > 1024 * 1024) {
+        const contentUri = await FileSystem.getContentUriAsync(fileUri);
+        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+          data: contentUri,
+          type: 'application/vnd.android.package-archive',
+          flags: 1,
+        });
+        return;
       }
 
-      // 带进度回调的下载
-      const download = FileSystem.createDownloadResumable(
-        url,
-        fileUri,
-        {},
-        (progress) => {
-          const pct = progress.totalBytesExpectedToWrite > 0
-            ? Math.round((progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100)
-            : 0;
-          setDownloadProgress(pct);
-        },
-      );
-      const result = await download.downloadAsync();
+      // 清理其他残留（不同版本的历史安装包）
+      const dirUri = FileSystem.cacheDirectory ?? '';
+      try {
+        const cached = await FileSystem.readDirectoryAsync(dirUri);
+        for (const f of cached) {
+          if (f.startsWith('app-release-') && f.endsWith('.apk') && f !== `app-release-${targetTag}.apk`) {
+            await FileSystem.deleteAsync(`${dirUri}${f}`).catch(() => {});
+          }
+        }
+      } catch { /* 目录读取失败忽略 */ }
+
+      // 带进度回调的下载（优先镜像，失败回退官方）
+      const downloadFrom = async (u: string) => {
+        const dl = FileSystem.createDownloadResumable(
+          u,
+          fileUri,
+          {},
+          (progress) => {
+            const pct = progress.totalBytesExpectedToWrite > 0
+              ? Math.round((progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100)
+              : 0;
+            setDownloadProgress(pct);
+          },
+        );
+        return dl.downloadAsync();
+      };
+
+      let result = null;
+      if (mirrorUrl) {
+        try {
+          result = await downloadFrom(mirrorUrl);
+        } catch {
+          result = null;
+        }
+      }
+      if (!result || !result.uri) {
+        result = await downloadFrom(officialUrl);
+      }
       if (!result || !result.uri) throw new Error('下载失败');
 
       // Android：通过 IntentLauncher 打开安装界面

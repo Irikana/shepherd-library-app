@@ -24,6 +24,7 @@ import { useEditorStore } from '../src/store/editor-store';
 import { updateArticleHtml } from '../src/lib/article-parser';
 import { insertIntoLibraryHtml, removeFromLibraryHtml } from '../src/lib/article-sync';
 import type { ArticleCategory } from '../src/lib/article-sync';
+import { removeNewsItem, syncNewsSections } from '../src/lib/news-sync';
 import { EditMetaForm } from '../src/components/EditMetaForm';
 import { MarkdownEditor } from '../src/components/MarkdownEditor';
 import { CodeEditor } from '../src/components/CodeEditor';
@@ -143,8 +144,10 @@ export default function EditorScreen() {
           : '';
         if (catDir) {
           const category: ArticleCategory = { key: catDir, label: catDir, dir: catDir, anchor: '', enAnchor: '' };
+          const titleEn = fileName.replace(/\.html?$/, '');
+          const isNews = metadata.tags.includes('新闻');
           if (metadata.hidden) {
-            // hidden ON：从 library.html 移除（传纯文件名给 removeFromLibraryHtml）
+            // hidden ON：从 library.html 移除（中英文）
             for (const libPath of ['library/library.html', 'en/library/library.html']) {
               try {
                 const { content: libContent, sha: libSha } = await getFile(libPath);
@@ -160,15 +163,29 @@ export default function EditorScreen() {
                 syncSteps.push(`${libPath} 同步失败`);
               }
             }
+            // 新闻文章：从新闻板块移除
+            if (isNews) {
+              try {
+                const newsSteps = await removeNewsItem({
+                  title: metadata.title,
+                  titleEn,
+                  date: metadata.createDate,
+                  kind: 'text',
+                  categoryDir: catDir,
+                });
+                syncSteps.push(...newsSteps);
+              } catch {
+                syncSteps.push('新闻板块移除失败');
+              }
+            }
           } else {
-            // hidden OFF：插入到 library.html（传纯文件名给 insertIntoLibraryHtml）
+            // hidden OFF：插入到 library.html（中英文）
             const displayTitle = metadata.title;
-            const displayTitleEn = fileName.replace(/\.html?$/, '');
             for (const libPath of ['library/library.html', 'en/library/library.html']) {
               try {
                 const { content: libContent, sha: libSha } = await getFile(libPath);
                 const english = libPath.startsWith('en/');
-                const updated = insertIntoLibraryHtml(libContent, category, fileName, english ? displayTitleEn : displayTitle, english);
+                const updated = insertIntoLibraryHtml(libContent, category, fileName, english ? titleEn : displayTitle, english);
                 if (updated !== libContent) {
                   await putFile(libPath, updated, {
                     sha: libSha,
@@ -178,6 +195,21 @@ export default function EditorScreen() {
                 }
               } catch {
                 syncSteps.push(`${libPath} 同步失败`);
+              }
+            }
+            // 新闻文章：重新插入新闻板块
+            if (isNews) {
+              try {
+                const newsSteps = await syncNewsSections({
+                  title: metadata.title,
+                  titleEn,
+                  date: metadata.createDate,
+                  kind: 'text',
+                  categoryDir: catDir,
+                });
+                syncSteps.push(...newsSteps);
+              } catch {
+                syncSteps.push('新闻板块同步失败');
               }
             }
           }
