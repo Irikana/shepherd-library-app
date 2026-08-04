@@ -182,9 +182,10 @@ export function removeFromLibraryHtml(
   fileName: string,
 ): string {
   const baseName = fileName.split('/').pop() || fileName;
-  // 匹配中文版 href="paper/xxx.html" 或英文版 href="../../library/paper/xxx.html" 所在 <li>
+  // 匹配目标文章所在 <li>：锚定 <li> 后紧跟 <a href="目标">，避免误删其他条目或 <link>
+  // <li(?=[\s>]) 排除 <link ...>；<a\b ... href="目标"> 锚定目标条目自身
   const pattern = new RegExp(
-    `\\n\\s*<li[^>]*>[\\s\\S]*?href="[^"]*${escapeRegex(category.dir)}/${escapeRegex(baseName)}"[\\s\\S]*?<\\/li>`,
+    `\\n\\s*<li(?=[\\s>])[^>]*>\\s*<a\\b[^>]*href="[^"]*${escapeRegex(category.dir)}/${escapeRegex(baseName)}"[\\s\\S]*?<\\/li>`,
     'g',
   );
   return html.replace(pattern, '');

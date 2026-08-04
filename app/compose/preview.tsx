@@ -178,7 +178,7 @@ export default function PreviewScreen() {
               // 4. 非隐藏文章：同步 library.html 文章列表（中英文）
               try {
                 const { content, sha } = await getFile('library/library.html');
-                const updated = insertIntoLibraryHtml(content, category, `${category.dir}/${titleEn}.html`, title);
+                const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, title);
                 if (updated !== content) {
                   await putFile('library/library.html', updated, {
                     sha,
@@ -191,7 +191,7 @@ export default function PreviewScreen() {
               }
               try {
                 const { content, sha } = await getFile('en/library/library.html');
-                const updated = insertIntoLibraryHtml(content, category, `${category.dir}/${titleEn}.html`, titleEn, true);
+                const updated = insertIntoLibraryHtml(content, category, `${titleEn}.html`, titleEn, true);
                 if (updated !== content) {
                   await putFile('en/library/library.html', updated, {
                     sha,
