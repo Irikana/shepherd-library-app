@@ -94,30 +94,39 @@ export async function removeNewsItem(opts: NewsSyncOptions): Promise<string[]> {
   const enHref = `../library/${categoryDir}/${titleEn}.html`;
 
   // 通用：移除包含指定 href 的 <a ...>...</a> 卡片（文字卡 / 列表项）
+  // 用 lookahead 断言 href 与 class 同时存在，属性顺序无关（更健壮）
   const removeAnchor = (html: string, targetHref: string): string => {
     // 文字卡：<a ... class="news-featured-text-card" ...>...</a>
     const cardPattern = new RegExp(
-      `\\n?\\s*<a\\b[^>]*href="${escapeRegex(targetHref)}"[^>]*class="news-featured-text-card"[^>]*>[\\s\\S]*?<\\/a>`,
+      `\\n?\\s*<a\\b(?=[^>]*href="${escapeRegex(targetHref)}")(?=[^>]*class="news-featured-text-card")[^>]*>[\\s\\S]*?<\\/a>`,
       'g',
     );
     let next = html.replace(cardPattern, '');
     // news.html 列表项：<a ... class="news-list-item-text-only">...</a>
     const itemPattern = new RegExp(
-      `\\n?\\s*<a\\b[^>]*href="${escapeRegex(targetHref)}"[^>]*class="news-list-item-text-only"[^>]*>[\\s\\S]*?<\\/a>`,
+      `\\n?\\s*<a\\b(?=[^>]*href="${escapeRegex(targetHref)}")(?=[^>]*class="news-list-item-text-only")[^>]*>[\\s\\S]*?<\\/a>`,
       'g',
     );
     next = next.replace(itemPattern, '');
     return next;
   };
 
+  /**
+   * 仅当目标 href 位于左侧海报块内时，才删除整个海报块；
+   * 目标不在海报中时原样返回——绝不触碰海报块，避免清空整个新闻区
+   */
+  const removePosterIfMatches = (html: string, targetHref: string): string => {
+    const posterBlock = /<div class="news-featured-poster">[\s\S]*?<\/div>\s*<\/div>/;
+    const m = html.match(posterBlock);
+    if (!m) return html;
+    if (!m[0].includes(`href="${targetHref}"`)) return html;
+    return html.replace(posterBlock, '');
+  };
+
   // 1. index.html（中文）
   try {
     const { content, sha } = await getFile('index.html');
-    // 海报块整体移除（包含该 href 的 .news-featured-poster）
-    let updated = content.replace(
-      new RegExp(`<div class="news-featured-poster">[\\s\\S]*?href="${escapeRegex(href)}"[\\s\\S]*?<\\/div>\\s*<\\/div>`),
-      '',
-    );
+    let updated = removePosterIfMatches(content, href);
     updated = removeAnchor(updated, href);
     if (updated !== content) {
       await putFile('index.html', updated, { sha, message: `新闻隐藏：${titleEn}（移动端 App）` });
@@ -142,10 +151,7 @@ export async function removeNewsItem(opts: NewsSyncOptions): Promise<string[]> {
   // 3. en/index.html
   try {
     const { content, sha } = await getFile('en/index.html');
-    let updated = content.replace(
-      new RegExp(`<div class="news-featured-poster">[\\s\\S]*?href="${escapeRegex(enHref)}"[\\s\\S]*?<\\/div>\\s*<\\/div>`),
-      '',
-    );
+    let updated = removePosterIfMatches(content, enHref);
     updated = removeAnchor(updated, enHref);
     if (updated !== content) {
       await putFile('en/index.html', updated, { sha, message: `News hide: ${titleEn} (mobile app)` });
