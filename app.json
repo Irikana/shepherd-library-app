@@ -2,7 +2,7 @@
   "expo": {
     "name": "SlyWrite",
     "slug": "shepherd-library-app",
-    "version": "0.0.15.1",
+    "version": "0.0.15.2",
     "orientation": "portrait",
     "scheme": "shepherd-library",
     "userInterfaceStyle": "automatic",
@@ -19,7 +19,7 @@
         "backgroundColor": "#000000",
         "foregroundImage": "./src/assets/shephrdsLibraryWriteWithBackround.png"
       },
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "bundler": "metro",
