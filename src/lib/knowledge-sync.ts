@@ -57,11 +57,16 @@ function insertIntoCategoryPage(
     return pageHtml.replace(listMatch[0], `<ul class="article-list">${listMatch[1]}${li}\n    </ul>`);
   }
 
-  // 还是"暂无条目"：替换 #section-notice 蓝色提示框
-  const noticeMatch = pageHtml.match(/<section id="section-notice">[\s\S]*?<\/section>/);
+  // 还是"暂无条目"：替换提示区
+  // 结构差异：phenomenon/traceable 用 <section id="section-notice"> 包裹；recallable 是裸 <div class="function-box-blue">
   const snippet = entryListSnippet(category, [{ title, href }]);
-  if (noticeMatch) {
-    return pageHtml.replace(noticeMatch[0], snippet);
+  const sectionNotice = pageHtml.match(/<section id="section-notice">[\s\S]*?<\/section>/);
+  if (sectionNotice) {
+    return pageHtml.replace(sectionNotice[0], snippet);
+  }
+  const bareNotice = pageHtml.match(/<div class="function-box-blue">[\s\S]*?此分类下暂无条目[\s\S]*?<\/div>/);
+  if (bareNotice) {
+    return pageHtml.replace(bareNotice[0], snippet);
   }
 
   // 无锚点可插入：在 </main> 前追加
