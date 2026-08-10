@@ -94,13 +94,14 @@ export async function fetchSiteRelease(): Promise<ReleaseInfo | null> {
   return fetchRepoRelease(REPO_CONFIG.owner, REPO_CONFIG.repo);
 }
 
-/** 简单版本比较：v0.0.4 > v0.0.3 */
+/** 简单版本比较：v0.0.4 > v0.0.3；支持四段版本号（0.0.15.1 > 0.0.15） */
 export function compareVersions(a: string, b: string): number {
   const parse = (v: string) =>
     (v.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0));
   const pa = parse(a);
   const pb = parse(b);
-  for (let i = 0; i < 3; i++) {
+  const len = Math.max(pa.length, pb.length, 4);
+  for (let i = 0; i < len; i++) {
     if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
   }
   return 0;

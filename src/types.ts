@@ -6,6 +6,25 @@ export type ComposeKind = 'article' | 'news';
 /** 文章性质（录音/手写/信息/实验性），区别于文章分类（library/ 下目录） */
 export type ArticleType = '录音文章' | '手写文章' | '信息文章' | '实验性文章';
 
+/** 知识馆分类（现象 / 可回忆知识 / 可追溯知识） */
+export type KnowledgeCategory = 'phenomenon' | 'recallable' | 'traceable';
+
+/** 知识馆条目表单数据（与文章分开，结构为词条页而非文章页） */
+export interface KnowledgeEntryFormData {
+  /** 词条标题（中文，页面显示） */
+  title: string;
+  /** 英文标题：作为文件名使用 */
+  titleEn: string;
+  /** 知识馆分类 */
+  category: KnowledgeCategory;
+  /** 近义词 / 别称 */
+  aliases: string;
+  /** 创建日期 YYYY-MM-DD */
+  createDate: string;
+  /** 正文 Markdown（概述 / 详细说明 / 历史 分节） */
+  bodyMarkdown: string;
+}
+
 /** 内置文章属性标签（此外支持用户自定义标签；无标签时页面显示"无"字，不占用标签） */
 export type ArticleTagName = '新闻' | '小说' | '包含AI' | '有删减';
 

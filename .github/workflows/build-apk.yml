@@ -45,7 +45,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: shepherd-library-app-v0.0.15-release
+          name: shepherd-library-app-v0.0.15.1-release
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
 

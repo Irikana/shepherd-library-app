@@ -55,6 +55,12 @@ export default function HomeScreen() {
       enabled: true,
     },
     {
+      title: '撰写知识词条',
+      desc: '为知识馆（现象 / 可回忆 / 可追溯）创建词条页，发布后自动同步分类页词条列表',
+      href: '/compose/knowledge',
+      enabled: true,
+    },
+    {
       title: '草稿箱',
       desc: '自动保存的未完成文章，可恢复继续编辑',
       href: '/drafts',

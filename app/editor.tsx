@@ -24,6 +24,7 @@ import { useEditorStore } from '../src/store/editor-store';
 import { updateArticleHtml } from '../src/lib/article-parser';
 import { insertIntoLibraryHtml, removeFromLibraryHtml } from '../src/lib/article-sync';
 import type { ArticleCategory } from '../src/lib/article-sync';
+import type { ArticleFormData } from '../src/types';
 import { removeNewsItem, syncNewsSections } from '../src/lib/news-sync';
 import { EditMetaForm } from '../src/components/EditMetaForm';
 import { MarkdownEditor } from '../src/components/MarkdownEditor';
@@ -40,6 +41,118 @@ const NEW_FILE_ROOTS = [
 
 /** 文件名非法字符（Windows/仓库路径安全） */
 const INVALID_PATH_CHARS = /[\\/\u0000-\u001f<>:"|?*]|\.\./;
+
+/** 隐藏/取消隐藏文章的公开列表同步结果 */
+interface VisibilitySyncResult {
+  ok: string[];
+  fail: string[];
+}
+
+/**
+ * 隐藏/取消隐藏文章时同步公开列表（library.html 中英文 + 新闻板块）
+ * 各步骤独立 try/catch：失败不中断后续步骤，而是收集到 fail 中返回
+ * 供保存流程与「重试同步」共用，保证同一份逻辑可重复执行
+ */
+async function syncVisibility(
+  opts: {
+    hidden: boolean;
+    metadata: ArticleFormData;
+    targetPath: string;
+    fileName: string;
+  },
+): Promise<VisibilitySyncResult> {
+  const { hidden, metadata, targetPath, fileName } = opts;
+  const ok: string[] = [];
+  const fail: string[] = [];
+
+  // 从路径推断分类目录：library/paper/xxx.html → paper
+  const catDir = targetPath.startsWith('library/')
+    ? targetPath.slice('library/'.length).split('/').slice(0, -1).join('/')
+    : '';
+  if (!catDir) return { ok, fail };
+  const category: ArticleCategory = { key: catDir, label: catDir, dir: catDir, anchor: '', enAnchor: '' };
+  const titleEn = fileName.replace(/\.html?$/, '');
+  const isNews = metadata.tags.includes('新闻');
+
+  if (hidden) {
+    // hidden ON：从 library.html 移除（中英文）
+    for (const libPath of ['library/library.html', 'en/library/library.html']) {
+      try {
+        const { content: libContent, sha: libSha } = await getFile(libPath);
+        const updated = removeFromLibraryHtml(libContent, category, fileName);
+        if (updated !== libContent) {
+          await putFile(libPath, updated, {
+            sha: libSha,
+            message: `已隐藏文章：${metadata.title}（${libPath}，移动端 App）`,
+          });
+          ok.push(`${libPath} 已移除文章条目`);
+        } else {
+          ok.push(`${libPath} 未找到文章条目（可能已移除）`);
+        }
+      } catch (e) {
+        fail.push(`${libPath} 移除失败：${(e as Error).message}`);
+      }
+    }
+    // 新闻文章：从新闻板块移除
+    if (isNews) {
+      try {
+        const newsSteps = await removeNewsItem({
+          title: metadata.title,
+          titleEn,
+          date: metadata.createDate,
+          kind: 'text',
+          categoryDir: catDir,
+        });
+        for (const s of newsSteps) {
+          if (s.includes('失败')) fail.push(s);
+          else ok.push(s);
+        }
+      } catch (e) {
+        fail.push(`新闻板块移除失败：${(e as Error).message}`);
+      }
+    }
+  } else {
+    // hidden OFF：插入到 library.html（中英文）
+    const displayTitle = metadata.title;
+    for (const libPath of ['library/library.html', 'en/library/library.html']) {
+      try {
+        const { content: libContent, sha: libSha } = await getFile(libPath);
+        const english = libPath.startsWith('en/');
+        const updated = insertIntoLibraryHtml(libContent, category, fileName, english ? titleEn : displayTitle, english);
+        if (updated !== libContent) {
+          await putFile(libPath, updated, {
+            sha: libSha,
+            message: `已取消隐藏文章：${metadata.title}（${libPath}，移动端 App）`,
+          });
+          ok.push(`${libPath} 已插入文章条目`);
+        } else {
+          ok.push(`${libPath} 未找到分类锚点（文章条目未插入）`);
+        }
+      } catch (e) {
+        fail.push(`${libPath} 插入失败：${(e as Error).message}`);
+      }
+    }
+    // 新闻文章：重新插入新闻板块
+    if (isNews) {
+      try {
+        const newsSteps = await syncNewsSections({
+          title: metadata.title,
+          titleEn,
+          date: metadata.createDate,
+          kind: 'text',
+          categoryDir: catDir,
+        });
+        for (const s of newsSteps) {
+          if (s.includes('失败')) fail.push(s);
+          else ok.push(s);
+        }
+      } catch (e) {
+        fail.push(`新闻板块同步失败：${(e as Error).message}`);
+      }
+    }
+  }
+  return { ok, fail };
+}
 
 type Tab = 'meta' | 'body' | 'source';
 
@@ -134,99 +247,63 @@ export default function EditorScreen() {
         message: isNew ? `新建文件：${targetPath}（移动端 App）` : `编辑文件：${targetPath}（移动端 App）`,
       });
 
-      // 如果是文章且 hidden 状态变化了，同步 library.html（中英文）
-      const syncSteps: string[] = [];
+      // 如果是文章且 hidden 状态变化了，同步公开列表（library.html 中英文 + 新闻板块）
+      // 失败步骤不再静默：收集到 fail 后通过 Alert 告知，并提供「重试同步」入口
+      const syncOk: string[] = [];
+      const syncFail: string[] = [];
       if (hiddenChanged && metadata && !isNew) {
         const fileName = name || targetPath.split('/').pop() || '';
-        // 从路径推断分类目录：library/paper/xxx.html → paper
-        const catDir = targetPath.startsWith('library/')
-          ? targetPath.slice('library/'.length).split('/').slice(0, -1).join('/')
-          : '';
-        if (catDir) {
-          const category: ArticleCategory = { key: catDir, label: catDir, dir: catDir, anchor: '', enAnchor: '' };
-          const titleEn = fileName.replace(/\.html?$/, '');
-          const isNews = metadata.tags.includes('新闻');
-          if (metadata.hidden) {
-            // hidden ON：从 library.html 移除（中英文）
-            for (const libPath of ['library/library.html', 'en/library/library.html']) {
-              try {
-                const { content: libContent, sha: libSha } = await getFile(libPath);
-                const updated = removeFromLibraryHtml(libContent, category, fileName);
-                if (updated !== libContent) {
-                  await putFile(libPath, updated, {
-                    sha: libSha,
-                    message: `已隐藏文章：${metadata.title}（${libPath}，移动端 App）`,
-                  });
-                  syncSteps.push(`${libPath} 已移除文章条目`);
-                }
-              } catch {
-                syncSteps.push(`${libPath} 同步失败`);
-              }
-            }
-            // 新闻文章：从新闻板块移除
-            if (isNews) {
-              try {
-                const newsSteps = await removeNewsItem({
-                  title: metadata.title,
-                  titleEn,
-                  date: metadata.createDate,
-                  kind: 'text',
-                  categoryDir: catDir,
-                });
-                syncSteps.push(...newsSteps);
-              } catch {
-                syncSteps.push('新闻板块移除失败');
-              }
-            }
-          } else {
-            // hidden OFF：插入到 library.html（中英文）
-            const displayTitle = metadata.title;
-            for (const libPath of ['library/library.html', 'en/library/library.html']) {
-              try {
-                const { content: libContent, sha: libSha } = await getFile(libPath);
-                const english = libPath.startsWith('en/');
-                const updated = insertIntoLibraryHtml(libContent, category, fileName, english ? titleEn : displayTitle, english);
-                if (updated !== libContent) {
-                  await putFile(libPath, updated, {
-                    sha: libSha,
-                    message: `已取消隐藏文章：${metadata.title}（${libPath}，移动端 App）`,
-                  });
-                  syncSteps.push(`${libPath} 已插入文章条目`);
-                }
-              } catch {
-                syncSteps.push(`${libPath} 同步失败`);
-              }
-            }
-            // 新闻文章：重新插入新闻板块
-            if (isNews) {
-              try {
-                const newsSteps = await syncNewsSections({
-                  title: metadata.title,
-                  titleEn,
-                  date: metadata.createDate,
-                  kind: 'text',
-                  categoryDir: catDir,
-                });
-                syncSteps.push(...newsSteps);
-              } catch {
-                syncSteps.push('新闻板块同步失败');
-              }
-            }
-          }
-        }
+        const result = await syncVisibility({
+          hidden: metadata.hidden,
+          metadata,
+          targetPath,
+          fileName,
+        });
+        syncOk.push(...result.ok);
+        syncFail.push(...result.fail);
       }
 
       markSaved(targetPath, null);
       setSaving(false);
-      const extraHint = syncSteps.length > 0
-        ? '\n\n' + syncSteps.join('\n')
-        : metadataDirty && metadata
-          ? '\n\n提示：如需同步公开列表（library.html），请使用发布功能重新上传。'
-          : '';
+      const okHint = syncOk.length > 0 ? '\n\n' + syncOk.join('\n') : '';
+      const failHint = syncFail.length > 0
+        ? '\n\n以下同步未完成：\n' + syncFail.join('\n') + '\n\n可点击「重试同步」再次执行，或在网站手动调整。'
+        : '';
+      const extraHint = failHint || okHint || (metadataDirty && metadata
+        ? '\n\n提示：如需同步公开列表（library.html），请使用发布功能重新上传。'
+        : '');
       Alert.alert(
-        '保存成功',
+        syncFail.length > 0 ? '保存成功，但部分同步失败' : '保存成功',
         `文件：${targetPath}\n\n约 1-2 分钟后网站生效。${extraHint}`,
-        [{ text: '完成' }],
+        syncFail.length > 0
+          ? [
+              { text: '完成' },
+              {
+                text: '重试同步',
+                onPress: async () => {
+                  setSaving(true);
+                  try {
+                    const fileName = name || targetPath.split('/').pop() || '';
+                    const result = await syncVisibility({
+                      hidden: metadata!.hidden,
+                      metadata: metadata!,
+                      targetPath,
+                      fileName,
+                    });
+                    markSaved(targetPath, null);
+                    setSaving(false);
+                    const msg = result.fail.length > 0
+                      ? '仍有同步失败：\n' + result.fail.join('\n')
+                      : '同步完成：\n' + (result.ok.join('\n') || '（无需变更）');
+                    Alert.alert(result.fail.length > 0 ? '重试未完全成功' : '同步完成', msg, [{ text: '完成' }]);
+                  } catch (err) {
+                    setSaving(false);
+                    Alert.alert('重试失败', (err as Error).message, [{ text: '完成' }]);
+                  }
+                },
+              },
+            ]
+          : [{ text: '完成' }],
       );
     } catch (err) {
       setSaving(false);

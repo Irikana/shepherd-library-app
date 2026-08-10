@@ -219,7 +219,9 @@ export default function PreviewScreen() {
 
             setUploadStatus('done', undefined, filePath);
             setUploading(false);
-            setProgressLogs(steps);
+            // 区分成功/失败步骤，失败项标红，便于发现「隐藏文章但未从公开列表移除」这类部分失败
+            const hasFail = steps.some((s) => s.includes('失败') || s.includes('未移除') || s.includes('可手动'));
+            setProgressLogs(steps.map((s) => (hasFail && (s.includes('失败') || s.includes('可手动')) ? `[失败] ${s}` : s)));
             setLogVisible(true);
           } catch (err) {
             const msg = (err as Error).message;

@@ -62,6 +62,14 @@ export default function RootLayout() {
           options={{ title: '撰写文章' }}
         />
         <Stack.Screen
+          name="compose/knowledge"
+          options={{ title: '撰写知识词条' }}
+        />
+        <Stack.Screen
+          name="compose/knowledge-preview"
+          options={{ title: '知识词条预览' }}
+        />
+        <Stack.Screen
           name="compose/preview"
           options={{ title: '预览与上传' }}
         />

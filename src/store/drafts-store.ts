@@ -1,15 +1,18 @@
-// 草稿管理：撰写中的文章自动缓存到本机，退出重进后可选择恢复
+// 草稿管理：撰写中的文章/知识词条自动缓存到本机，退出重进后可选择恢复
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ArticleFormData, ComposeKind } from '../types';
+import type { ArticleFormData, ComposeKind, KnowledgeEntryFormData } from '../types';
+
+/** 草稿表单：文章草稿或知识词条草稿（kind 区分） */
+export type DraftForm = ArticleFormData | KnowledgeEntryFormData;
 
 export interface Draft {
   id: string;
   title: string;
   updatedAt: number;
-  form: ArticleFormData;
-  /** 草稿类型：普通文章 / 新闻（0.0.6 起；旧草稿无此字段，恢复时按普通文章处理） */
-  kind?: ComposeKind;
+  form: DraftForm;
+  /** 草稿类型：普通文章 / 新闻（0.0.6 起；旧草稿无此字段，恢复时按普通文章处理）/ 知识词条（0.0.16 起） */
+  kind?: ComposeKind | 'knowledge';
 }
 
 const DRAFTS_KEY = 'slywrite-drafts';

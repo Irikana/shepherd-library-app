@@ -82,8 +82,9 @@ export default function UpdatesScreen() {
       const apkAsset = appRelease?.assets?.find((a) => a.name === 'app-release.apk');
       const officialUrl = apkAsset?.browser_download_url || LATEST_APK_URL;
       // 镜像代理（国内加速），失败回退官方
+      // 注：ghproxy.com 已失效（301 跳转 ghfast.top，后者仍 302 回 GitHub），改用 gh-proxy.com
       const mirrorUrl = officialUrl.startsWith('https://github.com/')
-        ? `https://ghproxy.com/${officialUrl}`
+        ? `https://gh-proxy.com/${officialUrl}`
         : null;
       const targetTag = appRelease?.tagName?.replace(/^v/, '') || 'latest';
       const fileUri = `${FileSystem.cacheDirectory}app-release-${targetTag}.apk`;
@@ -112,16 +113,21 @@ export default function UpdatesScreen() {
       } catch { /* 目录读取失败忽略 */ }
 
       // 带进度回调的下载（优先镜像，失败回退官方）
+      // 进度：镜像若未返回 Content-Length（totalBytesExpectedToWrite=0），显示"下载中…"而非卡 0%
       const downloadFrom = async (u: string) => {
         const dl = FileSystem.createDownloadResumable(
           u,
           fileUri,
           {},
           (progress) => {
-            const pct = progress.totalBytesExpectedToWrite > 0
-              ? Math.round((progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100)
-              : 0;
-            setDownloadProgress(pct);
+            const expected = progress.totalBytesExpectedToWrite;
+            const written = progress.totalBytesWritten;
+            if (expected > 0) {
+              setDownloadProgress(Math.round((written / expected) * 100));
+            } else if (written > 0) {
+              // 未知总大小但有已下载字节：进度条显示不确定状态（脉冲），百分比文案用 100 以外标记
+              setDownloadProgress(101);
+            }
           },
         );
         return dl.downloadAsync();
@@ -222,15 +228,15 @@ export default function UpdatesScreen() {
             disabled={downloading}
           >
             <Text style={s.downloadBtnText}>
-              {downloading ? `下载中… ${downloadProgress}%` : `下载并安装 APK（${appRelease.tagName}）`}
+              {downloading ? (downloadProgress === 101 ? '下载中…' : `下载中… ${downloadProgress}%`) : `下载并安装 APK（${appRelease.tagName}）`}
             </Text>
           </Pressable>
           {downloading && (
             <View style={s.progressWrap}>
               <View style={s.progressBar}>
-                <View style={[s.progressFill, { width: `${downloadProgress}%` as any }]} />
+                <View style={[s.progressFill, downloadProgress === 101 && s.progressIndeterminate]} />
               </View>
-              <Text style={s.progressText}>{downloadProgress}%</Text>
+              <Text style={s.progressText}>{downloadProgress === 101 ? '…' : `${downloadProgress}%`}</Text>
             </View>
           )}
         </View>
@@ -356,6 +362,10 @@ const createStyles = (COLORS: Palette) =>
     progressFill: {
       height: '100%',
       backgroundColor: COLORS.accent,
+    },
+    progressIndeterminate: {
+      width: '40%',
+      opacity: 0.6,
     },
     progressText: { fontSize: 12, color: COLORS.textSecondary, minWidth: 36, textAlign: 'right' },
   });
