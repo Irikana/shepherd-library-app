@@ -89,6 +89,10 @@ export default function RootLayout() {
           options={{ title: '更新与版本' }}
         />
         <Stack.Screen
+          name="changelog"
+          options={{ title: '全部更新日志' }}
+        />
+        <Stack.Screen
           name="browser"
           options={{ title: '内容编辑' }}
         />

@@ -2,7 +2,7 @@
   "expo": {
     "name": "SlyWrite",
     "slug": "shepherd-library-app",
-    "version": "0.0.15.3",
+    "version": "0.0.15.4",
     "orientation": "portrait",
     "scheme": "shepherd-library",
     "userInterfaceStyle": "automatic",
@@ -14,12 +14,13 @@
     },
     "android": {
       "package": "io.github.irikana.shepherdlibrary",
+      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
       "icon": "./src/assets/shephrdsLibraryWriteWithBackround.png",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./src/assets/shephrdsLibraryWriteWithBackround.png"
       },
-      "versionCode": 4
+      "versionCode": 5
     },
     "web": {
       "bundler": "metro",

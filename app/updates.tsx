@@ -1,8 +1,9 @@
 // 更新与版本页：检查 App 最新 Release、下载 APK、显示网站版本、访问 SlyWrite 网站
 // 从 App 仓库（shepherd-library-app）检查 App 更新与下载 APK；
 // 从网站仓库（Irikana.github.io）显示牧羊人图书馆网站版本
-// 下载：直接用 Linking 跳转浏览器下载（GitHub Release asset 自动触发下载），
-// 用户下载完成后按系统提示安装
+// 下载：App 内下载（进度条），完成后唤起系统安装界面；
+// Android 8+ 需「安装未知应用」权限（manifest 声明 REQUEST_INSTALL_PACKAGES），
+// 安装失败时引导用户去系统设置开启，或回退浏览器下载
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as FileSystem from 'expo-file-system';
@@ -14,6 +15,9 @@ import { SPACING, useTheme, type Palette } from '../src/theme';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
 
+/** App 自身的 Android 包名（用于「安装未知应用」权限设置页跳转） */
+const ANDROID_PACKAGE = 'io.github.irikana.shepherdlibrary';
+
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
@@ -22,6 +26,38 @@ function formatDate(iso: string): string {
     return iso;
   }
 }
+
+/**
+ * 唤起系统安装界面；若系统未授予「安装未知应用」权限（Android 8+ 需要），
+ * 引导用户去系统设置开启，或回退浏览器下载。
+ */
+const launchInstaller = async (contentUri: string): Promise<boolean> => {
+  try {
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data: contentUri,
+      type: 'application/vnd.android.package-archive',
+      flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+    });
+    return true;
+  } catch {
+    Alert.alert('需要安装权限', '系统未允许 SlyWrite 安装应用。请开启「安装未知应用」权限后重试。', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '去开启',
+        onPress: () => {
+          IntentLauncher.startActivityAsync('android.settings.MANAGE_UNKNOWN_APP_SOURCES', {
+            data: `package:${ANDROID_PACKAGE}`,
+          }).catch(() => Linking.openURL(LATEST_APK_URL).catch(() => {}));
+        },
+      },
+      {
+        text: '浏览器下载',
+        onPress: () => Linking.openURL(LATEST_APK_URL).catch(() => {}),
+      },
+    ]);
+    return false;
+  }
+};
 
 export default function UpdatesScreen() {
   const router = useRouter();
@@ -93,11 +129,7 @@ export default function UpdatesScreen() {
       const existing = await FileSystem.getInfoAsync(fileUri);
       if (existing.exists && existing.size > 1024 * 1024) {
         const contentUri = await FileSystem.getContentUriAsync(fileUri);
-        await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-          data: contentUri,
-          type: 'application/vnd.android.package-archive',
-          flags: 1,
-        });
+        await launchInstaller(contentUri);
         return;
       }
 
@@ -146,13 +178,9 @@ export default function UpdatesScreen() {
       }
       if (!result || !result.uri) throw new Error('下载失败');
 
-      // Android：通过 IntentLauncher 打开安装界面
+      // Android：通过 IntentLauncher 打开安装界面（失败时引导开启安装权限）
       const contentUri = await FileSystem.getContentUriAsync(result.uri);
-      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-        data: contentUri,
-        type: 'application/vnd.android.package-archive',
-        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-      });
+      await launchInstaller(contentUri);
     } catch (err) {
       // 兜底：跳转浏览器下载
       Alert.alert('自动安装失败', '将打开浏览器下载，下载完成后请手动点击通知安装。');

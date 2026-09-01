@@ -96,17 +96,17 @@ export const DARK_PALETTE: Palette = {
 };
 
 /**
- * 毛玻璃色板：半透明白色磨砂表面，叠加在渐变背景（GlassBackdrop）之上。
+ * 毛玻璃色板：低透明度半透明白色磨砂表面，叠加在渐变背景 + 全屏 BlurView 之上。
  * 文字用深色保证在浅色磨砂上可读；isDark 视为 false（浅色磨砂）。
  */
 export const GLASS_PALETTE: Palette = {
   accent: '#2c3e50',
   accentLight: '#5d9ccc',
-  bg: 'rgba(255,255,255,0.18)',
-  bgSubtle: 'rgba(255,255,255,0.38)',
-  bgMuted: 'rgba(255,255,255,0.58)',
-  border: 'rgba(255,255,255,0.72)',
-  borderDark: 'rgba(255,255,255,0.9)',
+  bg: 'rgba(255,255,255,0.14)',
+  bgSubtle: 'rgba(255,255,255,0.26)',
+  bgMuted: 'rgba(255,255,255,0.44)',
+  border: 'rgba(255,255,255,0.55)',
+  borderDark: 'rgba(255,255,255,0.75)',
   text: '#1e293b',
   textSecondary: '#3d4a63',
   textLight: '#64748b',

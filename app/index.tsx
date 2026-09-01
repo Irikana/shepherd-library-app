@@ -85,6 +85,18 @@ export default function HomeScreen() {
       href: '/updates',
       enabled: true,
     },
+    {
+      title: '全部更新日志',
+      desc: '从最初版本到最新版本的完整迭代记录',
+      href: '/changelog',
+      enabled: true,
+    },
+    {
+      title: '设置',
+      desc: '主题（浅色 / 深色 / 跟随系统 / 毛玻璃）、站点配置与个性化',
+      href: '/settings',
+      enabled: true,
+    },
   ];
 
   const handleLogout = () => {
