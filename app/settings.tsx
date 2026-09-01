@@ -1,6 +1,6 @@
-// 设置页：主题（浅色 / 深色 / 跟随系统 / 毛玻璃）+ 站点配置管理（自定义分类 / 标签 / 上传目录）
+// 设置页：主题（浅色 / 深色 / 跟随系统 / 温和主题）+ 站点配置管理（自定义分类 / 标签 / 上传目录）
 // 0.0.7：新增「站点配置」——新增项同步到仓库 slywrite-config.json（真正意义上的创建，App 与网站共享）
-// 0.0.15.3：新增「毛玻璃」主题——半透明磨砂表面 + 渐变背景层（GlassBackdrop）
+// 0.0.15.5：移除「毛玻璃」主题，新增「暖米 / 雾蓝 / 森绿」三个温和主题
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSettingsStore } from '../src/store/settings-store';
@@ -11,7 +11,9 @@ const OPTIONS: { key: ThemeMode; label: string; desc: string }[] = [
   { key: 'system', label: '跟随系统', desc: '随系统外观设置自动切换' },
   { key: 'light', label: '浅色', desc: '始终使用浅色主题' },
   { key: 'dark', label: '深色', desc: '始终使用深色主题' },
-  { key: 'glass', label: '毛玻璃', desc: '半透明磨砂质感，叠加渐变背景' },
+  { key: 'warm', label: '暖米', desc: '柔和纸感米白，温和不刺眼' },
+  { key: 'mist', label: '雾蓝', desc: '静谧灰蓝，低饱和柔和' },
+  { key: 'sage', label: '森绿', desc: '淡雅护眼绿，清新温和' },
 ];
 
 export default function SettingsScreen() {

@@ -93,7 +93,7 @@ export default function HomeScreen() {
     },
     {
       title: '设置',
-      desc: '主题（浅色 / 深色 / 跟随系统 / 毛玻璃）、站点配置与个性化',
+      desc: '主题（浅色 / 深色 / 跟随系统 / 暖米 / 雾蓝 / 森绿）、站点配置与个性化',
       href: '/settings',
       enabled: true,
     },

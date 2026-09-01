@@ -8,7 +8,6 @@ import { useSettingsStore } from '../src/store/settings-store';
 import { useDraftsStore } from '../src/store/drafts-store';
 import { useConfigStore } from '../src/store/config-store';
 import { useTheme, type Palette } from '../src/theme';
-import { GlassBackdrop } from '../src/components/GlassBackdrop';
 
 export default function RootLayout() {
   const { isAuthenticated, init } = useAuthStore();
@@ -46,8 +45,6 @@ export default function RootLayout() {
 
   return (
     <View style={s.container}>
-      {/* 毛玻璃背景层：仅 glass 模式渲染，置于 Stack 之下 */}
-      <GlassBackdrop />
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
