@@ -3,7 +3,7 @@
 import { useColorScheme } from 'react-native';
 import { useSettingsStore } from './store/settings-store';
 
-export type ThemeMode = 'light' | 'dark' | 'system' | 'warm' | 'mist' | 'sage';
+export type ThemeMode = 'light' | 'dark' | 'system' | 'warm' | 'mist' | 'sage' | 'sunset' | 'ocean' | 'lavender' | 'coffee' | 'mint';
 
 /** 色板结构 */
 export interface Palette {
@@ -185,10 +185,160 @@ export const SAGE_PALETTE: Palette = {
   tagNovelText: '#76528f',
 };
 
+/** 新主题 · 日暮（暖色夕阳）：温暖的橙调粉红，如晚霞般柔和 */
+export const SUNSET_PALETTE: Palette = {
+  accent: '#b8694d',
+  accentLight: '#d48970',
+  bg: '#fdf8f4',
+  bgSubtle: '#faf1ea',
+  bgMuted: '#f5e8dc',
+  border: '#e8d5c6',
+  borderDark: '#d9c1ac',
+  text: '#3d2819',
+  textSecondary: '#6d523d',
+  textLight: '#9a8166',
+  danger: '#b34a42',
+  success: '#5a8b66',
+  warning: '#a87e32',
+  infoBg: '#fdf5ed',
+  dangerBg: '#fcece9',
+  successBg: '#eff5ed',
+  tagAiBg: '#fff3d9',
+  tagAiText: '#9a7328',
+  tagEditedBg: '#fce9e5',
+  tagEditedText: '#ad4a41',
+  tagNewsBg: 'rgba(184,105,77,0.14)',
+  tagNewsBorder: '#d9b5a0',
+  tagNewsText: '#a5624b',
+  tagNovelBg: '#f5ebf8',
+  tagNovelBorder: '#d6b8e2',
+  tagNovelText: '#815993',
+};
+
+/** 新主题 · 海洋（深邃蓝调）：沉稳的深蓝，如深海般静谧 */
+export const OCEAN_PALETTE: Palette = {
+  accent: '#3d6b8a',
+  accentLight: '#5a8fb3',
+  bg: '#f3f7fa',
+  bgSubtle: '#eaf1f7',
+  bgMuted: '#dfe9f2',
+  border: '#cfdce8',
+  borderDark: '#b8cbd9',
+  text: '#1e3140',
+  textSecondary: '#4a5f70',
+  textLight: '#738a9b',
+  danger: '#b04f4c',
+  success: '#4f8d73',
+  warning: '#a1843c',
+  infoBg: '#e6f2f8',
+  dangerBg: '#f7ebeb',
+  successBg: '#ebf5ef',
+  tagAiBg: '#f8f1da',
+  tagAiText: '#96742c',
+  tagEditedBg: '#f8e7e6',
+  tagEditedText: '#a84c49',
+  tagNewsBg: 'rgba(61,107,138,0.16)',
+  tagNewsBorder: '#a3c3d9',
+  tagNewsText: '#3a6484',
+  tagNovelBg: '#ede8f6',
+  tagNovelBorder: '#cbb8e0',
+  tagNovelText: '#745390',
+};
+
+/** 新主题 · 薰衣草（淡紫柔和）：柔和的紫调，如薰衣草田般浪漫 */
+export const LAVENDER_PALETTE: Palette = {
+  accent: '#7d6b8a',
+  accentLight: '#9e8db3',
+  bg: '#f8f6fa',
+  bgSubtle: '#f2eef7',
+  bgMuted: '#e9e3f0',
+  border: '#dcd3e6',
+  borderDark: '#cbbfd6',
+  text: '#302838',
+  textSecondary: '#5f546b',
+  textLight: '#8b7f97',
+  danger: '#b04f59',
+  success: '#4f8d6b',
+  warning: '#a17f3c',
+  infoBg: '#ede9f5',
+  dangerBg: '#f7ebee',
+  successBg: '#ebf5ed',
+  tagAiBg: '#f8f0da',
+  tagAiText: '#96742c',
+  tagEditedBg: '#f8e7eb',
+  tagEditedText: '#a84951',
+  tagNewsBg: 'rgba(125,107,138,0.16)',
+  tagNewsBorder: '#c5b8d6',
+  tagNewsText: '#6d5f80',
+  tagNovelBg: '#ede8f6',
+  tagNovelBorder: '#cbb8e0',
+  tagNovelText: '#745390',
+};
+
+/** 新主题 · 咖啡（深棕温润）：温润的深棕调，如咖啡香气般醇厚 */
+export const COFFEE_PALETTE: Palette = {
+  accent: '#7a5d47',
+  accentLight: '#9f7d63',
+  bg: '#faf7f2',
+  bgSubtle: '#f4efe7',
+  bgMuted: '#ebe3d7',
+  border: '#ddd2c4',
+  borderDark: '#ccbbaa',
+  text: '#342818',
+  textSecondary: '#5f4e3c',
+  textLight: '#8a7660',
+  danger: '#b04942',
+  success: '#4e8a5f',
+  warning: '#a57d2f',
+  infoBg: '#f6f1e8',
+  dangerBg: '#f7ebe8',
+  successBg: '#ebf4eb',
+  tagAiBg: '#fff2d8',
+  tagAiText: '#997428',
+  tagEditedBg: '#fce8e4',
+  tagEditedText: '#ad473d',
+  tagNewsBg: 'rgba(122,93,71,0.14)',
+  tagNewsBorder: '#cdb7a0',
+  tagNewsText: '#705947',
+  tagNovelBg: '#f4e9f7',
+  tagNovelBorder: '#d4b8e0',
+  tagNovelText: '#7f5591',
+};
+
+/** 新主题 · 薄荷（清新绿调）：清新的绿薄荷色，如晨露般清爽 */
+export const MINT_PALETTE: Palette = {
+  accent: '#4d8a73',
+  accentLight: '#6dab95',
+  bg: '#f4faf7',
+  bgSubtle: '#eaf5f0',
+  bgMuted: '#deeee7',
+  border: '#cfe3da',
+  borderDark: '#bad4c7',
+  text: '#1e3830',
+  textSecondary: '#4a6359',
+  textLight: '#738f84',
+  danger: '#b04c52',
+  success: '#4f8d66',
+  warning: '#a1813c',
+  infoBg: '#e6f5ef',
+  dangerBg: '#f7ebec',
+  successBg: '#ebf5ed',
+  tagAiBg: '#f8f1da',
+  tagAiText: '#96742c',
+  tagEditedBg: '#f8e7e8',
+  tagEditedText: '#a8494e',
+  tagNewsBg: 'rgba(77,138,115,0.16)',
+  tagNewsBorder: '#a8d4c1',
+  tagNewsText: '#468268',
+  tagNovelBg: '#ede8f6',
+  tagNovelBorder: '#cbb8e0',
+  tagNovelText: '#745390',
+};
+
 /**
  * 当前主题色板 hook。
  * themeMode 为 'system' 时跟随系统外观（useColorScheme）；
- * 温和主题（暖米/雾蓝/森绿）为固定浅色调，不随系统切换。
+ * 温和主题（暖米/雾蓝/森绿/日暮/海洋/薰衣草/咖啡/薄荷）为固定浅色调，不随系统切换。
  */
 export function useTheme(): { isDark: boolean; colors: Palette } {
   const mode = useSettingsStore((s) => s.themeMode);
@@ -202,7 +352,17 @@ export function useTheme(): { isDark: boolean; colors: Palette } {
           ? MIST_PALETTE
           : mode === 'sage'
             ? SAGE_PALETTE
-            : LIGHT_PALETTE;
+            : mode === 'sunset'
+              ? SUNSET_PALETTE
+              : mode === 'ocean'
+                ? OCEAN_PALETTE
+                : mode === 'lavender'
+                  ? LAVENDER_PALETTE
+                  : mode === 'coffee'
+                    ? COFFEE_PALETTE
+                    : mode === 'mint'
+                      ? MINT_PALETTE
+                      : LIGHT_PALETTE;
   const isDark =
     mode === 'dark' || (mode === 'system' && system === 'dark');
   return { isDark, colors };

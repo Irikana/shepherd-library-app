@@ -14,6 +14,11 @@ const OPTIONS: { key: ThemeMode; label: string; desc: string }[] = [
   { key: 'warm', label: '暖米', desc: '柔和纸感米白，温和不刺眼' },
   { key: 'mist', label: '雾蓝', desc: '静谧灰蓝，低饱和柔和' },
   { key: 'sage', label: '森绿', desc: '淡雅护眼绿，清新温和' },
+  { key: 'sunset', label: '日暮', desc: '暖色夕阳橙粉，如晚霞般柔和' },
+  { key: 'ocean', label: '海洋', desc: '深邃蓝调，如深海般静谧' },
+  { key: 'lavender', label: '薰衣草', desc: '淡紫柔和，如薰衣草田般浪漫' },
+  { key: 'coffee', label: '咖啡', desc: '深棕温润，如咖啡香气般醇厚' },
+  { key: 'mint', label: '薄荷', desc: '清新绿调，如晨露般清爽' },
 ];
 
 export default function SettingsScreen() {

@@ -1,4 +1,4 @@
-// 首页：功能入口卡片 + 版本号 + 速率限制 + 设置入口
+// 首页：功能入口卡片 + 版本号 + 速率限制
 import React from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Platform } from 'react-native';
@@ -9,7 +9,6 @@ import { useDraftsStore } from '../src/store/drafts-store';
 import { rateLimit } from '../src/lib/rate-limit';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
-import GearImage from '../src/assets/settings-gear.png';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
 
@@ -93,7 +92,7 @@ export default function HomeScreen() {
     },
     {
       title: '设置',
-      desc: '主题（浅色 / 深色 / 跟随系统 / 暖米 / 雾蓝 / 森绿）、站点配置与个性化',
+      desc: '主题（浅色 / 深色 / 跟随系统 / 暖米 / 雾蓝 / 森绿 / 日暮 / 海洋 / 薰衣草 / 咖啡 / 薄荷）、站点配置与个性化',
       href: '/settings',
       enabled: true,
     },
@@ -128,9 +127,6 @@ export default function HomeScreen() {
             <Text style={s.appVersionLabel}>软件版本</Text>
             <Text style={s.appVersionValue}>v{APP_VERSION}</Text>
           </View>
-          <Pressable style={s.settingsBtn} onPress={() => router.push('/settings')} hitSlop={8}>
-            <Image source={GearImage} style={s.settingsGear} resizeMode="contain" />
-          </Pressable>
         </View>
       </View>
 
@@ -197,18 +193,9 @@ const createStyles = (COLORS: Palette) =>
     brandName: { fontSize: 22, fontWeight: '700', color: COLORS.accent },
     brandSub: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
     brandRight: { flexDirection: 'row', alignItems: 'center', marginLeft: SPACING.sm },
-    appVersionBox: { alignItems: 'flex-end', marginRight: SPACING.sm },
+    appVersionBox: { alignItems: 'flex-end' },
     appVersionLabel: { fontSize: 11, color: COLORS.textLight },
     appVersionValue: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600', marginTop: 2 },
-    settingsBtn: {
-      borderWidth: 1,
-      borderColor: COLORS.border,
-      backgroundColor: COLORS.bgSubtle,
-      padding: 5,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    settingsGear: { width: 22, height: 22 },
     statusBar: {
       flexDirection: 'row',
       alignItems: 'center',
