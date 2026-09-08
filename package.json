@@ -1,6 +1,6 @@
 {
   "name": "shepherd-library-app",
-  "version": "0.0.15.6",
+  "version": "0.0.15.7",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

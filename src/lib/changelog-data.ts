@@ -1143,5 +1143,101 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "首页「设置」入口文案同步为主题列表（浅色 / 深色 / 跟随系统 / 暖米 / 雾蓝 / 森绿）"
       }
     ]
+  },
+  {
+    "key": "0.0.15.6",
+    "title": "0.0.15.6（2026-09-09）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.15.6（2026-09-09）"
+      },
+      {
+        "kind": "section",
+        "text": "新增"
+      },
+      {
+        "kind": "bullet",
+        "text": "**5 个全新主题**：在现有 6 个主题基础上，新增 5 个温和主题色板（共 11 个主题可选）："
+      },
+      {
+        "kind": "bullet",
+        "text": "**日暮**（`sunset`）：暖色夕阳橙粉调，如晚霞般柔和温暖"
+      },
+      {
+        "kind": "bullet",
+        "text": "**海洋**（`ocean`）：深邃蓝调，如深海般静谧沉稳"
+      },
+      {
+        "kind": "bullet",
+        "text": "**薰衣草**（`lavender`）：淡紫柔和，如薰衣草田般浪漫优雅"
+      },
+      {
+        "kind": "bullet",
+        "text": "**咖啡**（`coffee`）：深棕温润，如咖啡香气般醇厚温暖"
+      },
+      {
+        "kind": "bullet",
+        "text": "**薄荷**（`mint`）：清新绿调，如晨露般清爽提神"
+      },
+      {
+        "kind": "bullet",
+        "text": "所有新主题均为低饱和柔和色调，浅色调设计，兼容 logo 黑白切换与状态栏样式"
+      },
+      {
+        "kind": "bullet",
+        "text": "设置页主题列表扩展至 11 个选项，每个主题配有简明描述"
+      },
+      {
+        "kind": "section",
+        "text": "改进"
+      },
+      {
+        "kind": "bullet",
+        "text": "**移除首页顶部齿轮图标**：从品牌区移除设置齿轮按钮，保留功能列表中的「设置」卡片作为唯一入口，界面更简洁统一"
+      },
+      {
+        "kind": "bullet",
+        "text": "首页「设置」卡片文案更新，列出全部 11 个主题名称"
+      },
+      {
+        "kind": "section",
+        "text": "其他"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号提升至 0.0.15.6（package.json / app.json / CI artifact name 三处同步），android.versionCode 递增至 7"
+      },
+      {
+        "kind": "bullet",
+        "text": "主题系统类型定义、持久化逻辑、色板映射逻辑完整同步，支持全部 11 种主题模式"
+      }
+    ]
+  },
+  {
+    "key": "0.0.15.7",
+    "title": "0.0.15.7（2026-09-09）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.15.7（2026-09-09）"
+      },
+      {
+        "kind": "section",
+        "text": "修复"
+      },
+      {
+        "kind": "bullet",
+        "text": "**更新日志补充（关键修复）**：0.0.15.5 版本引入的更新日志生成脚本（`scripts/gen-changelog.js`）将 changelog 目录内容同步到软件内置数据（`src/lib/changelog-data.ts`），但 0.0.15.6 版本发布时忘记运行该脚本，导致软件内「全部更新日志」页缺失 0.0.15.6 版本内容。现已补充运行脚本，0.0.15.6 与 0.0.15.7 两个版本的更新日志均已写入软件内"
+      },
+      {
+        "kind": "section",
+        "text": "其他"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号提升至 0.0.15.7（package.json / app.json / CI artifact name 三处同步），android.versionCode 递增至 8"
+      }
+    ]
   }
 ];
