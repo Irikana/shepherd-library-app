@@ -74,9 +74,16 @@ export const useDraftsStore = create<DraftsState>((set, get) => ({
       const raw = await AsyncStorage.getItem(DRAFTS_KEY);
       let list: Draft[] = raw ? JSON.parse(raw) : [];
       if (Array.isArray(list)) {
-        // 清理历史遗留的空草稿（旧版本点开撰写页就会保存的「未命名」冗余草稿）
+        // 清理历史遗留的空草稿（旧版本点开撰写页就会保存的「未命名」冗余草稿）：
+        // 标题/英文名/正文全空即视为无价值（旧草稿日期与当天默认日期不同会误判为「已编辑」，故单独判空）
+        const isEmptyLegacy = (d: Draft) => {
+          const f = d.form as Partial<ArticleFormData & KnowledgeEntryFormData> | undefined;
+          if (!f) return true;
+          return !(f.title ?? '').trim() && !(f.titleEn ?? '').trim() && !(f.bodyMarkdown ?? '').trim();
+        };
         const cleaned = list.filter((d) => {
           if (!d || !d.form) return false;
+          if (isEmptyLegacy(d)) return false;
           if (d.kind === 'knowledge') return knowledgeFormEdited(d.form as KnowledgeEntryFormData);
           return articleFormEdited(d.form as ArticleFormData);
         });
