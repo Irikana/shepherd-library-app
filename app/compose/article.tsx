@@ -9,7 +9,7 @@ import { MetaForm } from '../../src/components/MetaForm';
 import { MarkdownEditor } from '../../src/components/MarkdownEditor';
 import { useComposeStore } from '../../src/store/compose-store';
 import { useConfigStore } from '../../src/store/config-store';
-import { useDraftsStore } from '../../src/store/drafts-store';
+import { useDraftsStore, articleFormEdited } from '../../src/store/drafts-store';
 import { generateArticleHtml } from '../../src/templates/article';
 import { validateArticleHtml } from '../../src/templates/validators';
 import { buildPreviewHtml, getSiteCss } from '../../src/lib/site-style';
@@ -92,15 +92,22 @@ export default function ComposeArticleScreen() {
   }, [draftId, startDraft]);
 
   // 自动保存草稿（防抖），退出软件重进后可在草稿箱恢复
+  // 0.0.15.8 起：只有真正编辑过（相对默认表单有实际内容变化）才计入草稿箱；
+  // 误开撰写页不再制造「未命名」冗余草稿；编辑后全部撤销回默认值则清掉该草稿
   useEffect(() => {
     if (!draftId) return;
     const t = setTimeout(() => {
-      useDraftsStore.getState().upsert({
-        id: draftId,
-        title: form.title.trim() || '未命名',
-        updatedAt: Date.now(),
-        form,
-      });
+      const drafts = useDraftsStore.getState();
+      if (articleFormEdited(form)) {
+        drafts.upsert({
+          id: draftId,
+          title: form.title.trim() || '未命名',
+          updatedAt: Date.now(),
+          form,
+        });
+      } else {
+        void drafts.remove(draftId);
+      }
     }, 600);
     return () => clearTimeout(t);
   }, [form, draftId]);

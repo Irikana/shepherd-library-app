@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { MarkdownEditor } from '../../src/components/MarkdownEditor';
 import { DatePickerModal } from '../../src/components/DatePickerModal';
 import { useKnowledgeStore, defaultKnowledgeForm } from '../../src/store/knowledge-store';
-import { useDraftsStore } from '../../src/store/drafts-store';
+import { useDraftsStore, knowledgeFormEdited } from '../../src/store/drafts-store';
 import { KNOWLEDGE_CATEGORIES } from '../../src/templates/knowledge-entry';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
 
@@ -30,16 +30,23 @@ export default function ComposeKnowledgeScreen() {
   }, [draftId, startDraft]);
 
   // 自动保存草稿（防抖）
+  // 0.0.15.8 起：只有真正编辑过（相对默认表单有实际内容变化）才计入草稿箱，
+  // 误开撰写页不再制造「未命名词条」冗余草稿；编辑后全部撤销回默认值则清掉该草稿
   useEffect(() => {
     if (!draftId) return;
     const t = setTimeout(() => {
-      useDraftsStore.getState().upsert({
-        id: draftId,
-        title: form.title.trim() || '未命名词条',
-        updatedAt: Date.now(),
-        form: { ...form },
-        kind: 'knowledge',
-      });
+      const drafts = useDraftsStore.getState();
+      if (knowledgeFormEdited(form)) {
+        drafts.upsert({
+          id: draftId,
+          title: form.title.trim() || '未命名词条',
+          updatedAt: Date.now(),
+          form: { ...form },
+          kind: 'knowledge',
+        });
+      } else {
+        void drafts.remove(draftId);
+      }
     }, 600);
     return () => clearTimeout(t);
   }, [form, draftId]);

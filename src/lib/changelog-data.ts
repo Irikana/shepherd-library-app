@@ -1239,5 +1239,55 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "版本号提升至 0.0.15.7（package.json / app.json / CI artifact name 三处同步），android.versionCode 递增至 8"
       }
     ]
+  },
+  {
+    "key": "0.0.15.8",
+    "title": "0.0.15.8（2026-09-09）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.15.8（2026-09-09）"
+      },
+      {
+        "kind": "section",
+        "text": "修复"
+      },
+      {
+        "kind": "bullet",
+        "text": "**内容编辑「未能自动还原正文」（关键修复）**：App 打包时 Metro 按 package.json 的 browser 字段把 turndown 重映射为浏览器构建，该构建依赖 `window.DOMParser` / `document.implementation` / ActiveX——React Native 中三者均不存在，导致 HTML → Markdown 还原在 APK 内必然抛错，每篇文章打开「正文」标签页都只会提示改用源码编辑。现新增 `metro.config.js`，用自定义 `resolveRequest` 把 `turndown` 固定到 Node 版构建（内置 @mixmark-io/domino 纯 JS 解析器，无 Node 专属依赖），并把被 browser 字段置空的 `@mixmark-io/domino` 也指回真实实现；仓库全部 45 篇文章已实测可正常还原为 Markdown"
+      },
+      {
+        "kind": "bullet",
+        "text": "**非 left-align 结构文章无法定位正文**：正文区段提取此前只认 `<div class=\"left-align\">`，作品文章（`story-work`）、多段 left-align 续篇、练习分区页、视觉组件示例页等共 23 篇提取不到正文。现改为「article-meta 之后、所属容器闭合之前」的通用正文区段定位（含页脚元数据边界切割），并对 left-align / story-work 结构容器自动拆包展示、写回时重包裹（保住网站 `.left-align p` 等容器类样式）；元数据写回（更新标题/页脚）同步改为深度匹配，不再依赖「meta 后紧跟 left-align」的假设"
+      },
+      {
+        "kind": "bullet",
+        "text": "**源码标签页编辑后正文页被旧内容覆盖**：「源码」标签页修改后切回「正文」，编辑器此前可能展示过期的 Markdown，保存会反向覆盖源码改动。现源码编辑会标记正文还原过期，切回「正文」标签页时自动从当前正文 HTML 重新还原（惰性刷新，避免每击键跑一次转换卡顿输入）"
+      },
+      {
+        "kind": "section",
+        "text": "改进"
+      },
+      {
+        "kind": "bullet",
+        "text": "**草稿箱只收「真正编辑过」的内容**：此前每次点开「撰写文章 / 撰写知识词条」都会生成一条未命名草稿（防抖自动保存无条件写入），误点多次后草稿箱冗余严重。现仅在表单相对默认值有实际变化（标题/正文/标签/日期/作者/新闻开关/分类等任一偏离）时才计入草稿箱；进入撰写页后又把内容全部撤销回默认值的，该条草稿会被自动清除。知识词条撰写同样适用"
+      },
+      {
+        "kind": "bullet",
+        "text": "**历史空草稿自动清理**：旧版本遗留的「未命名 / 未命名词条」空草稿在启动加载草稿箱时自动过滤并同步清理持久化存储，无需手动逐条删除"
+      },
+      {
+        "kind": "section",
+        "text": "其他"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号提升至 0.0.15.8（package.json / app.json / CI artifact name 三处同步），android.versionCode 递增至 9"
+      },
+      {
+        "kind": "bullet",
+        "text": "新增仓库回归探针脚本思路沉淀：正文提取/还原/写回对全部 45 篇文章做了往返与元数据更新无损校验（div 配平、文本量、脚注保留）"
+      }
+    ]
   }
 ];

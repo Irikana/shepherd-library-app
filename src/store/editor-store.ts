@@ -38,6 +38,8 @@ export interface EditorState {
   bodyMarkdown: string | null;
   /** 正文 Markdown 是否已修改（相对 load 时的还原值） */
   bodyDirty: boolean;
+  /** 正文 Markdown 是否过期（源码标签页编辑后未重新还原；切回正文页时惰性刷新，避免每击键跑一次转换） */
+  bodyStale: boolean;
 
   /** 各标签页锁定状态（true = 只读防误触，与撰写页锁一致） */
   locked: { meta: boolean; body: boolean; source: boolean };
@@ -48,6 +50,8 @@ export interface EditorState {
   loadNew: () => void;
   /** 更新源码内容 */
   setContent: (content: string) => void;
+  /** 惰性刷新正文 Markdown（从当前正文 HTML 重新还原，清除过期标记） */
+  refreshBodyMarkdown: () => void;
   /** 更新正文区段 HTML（同步写回完整文件内容） */
   setBodyHtml: (bodyHtml: string) => void;
   /** 更新正文 Markdown（撰写式编辑；渲染为 HTML 并写回完整文件内容） */
@@ -78,6 +82,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   bodyHtml: null,
   bodyMarkdown: null,
   bodyDirty: false,
+  bodyStale: false,
   locked: { meta: false, body: false, source: false },
 
   load: (path, content, sha = null, name) => {
@@ -97,8 +102,10 @@ export const useEditorStore = create<EditorState>((set) => ({
       metadata: article,
       metadataDirty: false,
       bodyHtml,
-      bodyMarkdown: bodyHtml ? htmlToMarkdown(bodyHtml) : null,
+      // 提取成功（含空正文）就尝试还原；只有提取/转换失败才为 null（显示源码编辑提示）
+      bodyMarkdown: article && bodyHtml !== null ? htmlToMarkdown(bodyHtml) : null,
       bodyDirty: false,
+      bodyStale: false,
       locked: { meta: false, body: false, source: false },
     });
   },
@@ -118,16 +125,32 @@ export const useEditorStore = create<EditorState>((set) => ({
       bodyHtml: null,
       bodyMarkdown: null,
       bodyDirty: false,
+      bodyStale: false,
       locked: { meta: false, body: false, source: false },
     }),
 
   setContent: (content) =>
-    set((state) => ({
-      content,
-      // 源码可能修改了正文区段，同步重新提取，保证「正文」标签页与「源码」标签页内容一致
-      bodyHtml: state.isArticle ? extractBodyHtml(content) : null,
-      dirty: content !== state.originalContent,
-    })),
+    set((state) => {
+      // 源码可能修改了正文区段：同步重新提取（廉价字符串操作），并标记 Markdown 过期。
+      // 不在每次击键都跑 HTML → Markdown 还原（大正文会卡输入），切回「正文」标签页时
+      // 由 refreshBodyMarkdown 惰性刷新，保证正文页与源码页一致（避免旧 Markdown 覆盖源码编辑）
+      const bodyHtml = state.isArticle ? extractBodyHtml(content) : null;
+      return {
+        content,
+        bodyHtml,
+        bodyStale: state.isArticle,
+        bodyMarkdown: state.isArticle && bodyHtml === null ? null : state.bodyMarkdown,
+        dirty: content !== state.originalContent,
+      };
+    }),
+
+  refreshBodyMarkdown: () =>
+    set((state) => {
+      if (!state.isArticle || !state.bodyStale) return {};
+      const bodyMarkdown =
+        state.bodyHtml !== null ? htmlToMarkdown(state.bodyHtml) : null;
+      return { bodyMarkdown, bodyStale: false };
+    }),
 
   setBodyHtml: (bodyHtml) =>
     set((state) => {
@@ -151,6 +174,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         content,
         dirty: content !== state.originalContent,
         bodyDirty: true,
+        bodyStale: false,
       };
     }),
 
@@ -191,17 +215,21 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
 
   markSaved: (path, sha) =>
-    set((state) => ({
-      path,
-      name: state.name || path.split('/').pop() || '',
-      originalContent: state.content,
-      sha,
-      isNew: false,
-      dirty: false,
-      metadataDirty: false,
-      bodyHtml: state.isArticle ? extractBodyHtml(state.content) : null,
-      // 保存后重新以当前正文为基准还原 Markdown（保留撰写式编辑一致性）
-      bodyMarkdown: state.isArticle && state.bodyHtml ? htmlToMarkdown(state.bodyHtml) : null,
-      bodyDirty: false,
-    })),
+    set((state) => {
+      const bodyHtml = state.isArticle ? extractBodyHtml(state.content) : null;
+      return {
+        path,
+        name: state.name || path.split('/').pop() || '',
+        originalContent: state.content,
+        sha,
+        isNew: false,
+        dirty: false,
+        metadataDirty: false,
+        bodyHtml,
+        // 保存后重新以当前正文为基准还原 Markdown（保留撰写式编辑一致性）
+        bodyMarkdown: state.isArticle && bodyHtml !== null ? htmlToMarkdown(bodyHtml) : null,
+        bodyDirty: false,
+        bodyStale: false,
+      };
+    }),
 }));

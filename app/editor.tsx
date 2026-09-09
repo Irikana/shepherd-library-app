@@ -187,6 +187,7 @@ export default function EditorScreen() {
     setBodyMarkdown,
     toggleLock,
     markSaved,
+    refreshBodyMarkdown,
   } = useEditorStore();
   const [saving, setSaving] = useState(false);
   const [newDir, setNewDir] = useState(NEW_FILE_ROOTS[0].value);
@@ -327,11 +328,12 @@ export default function EditorScreen() {
     toggleLock(tab);
   };
 
-  /** 切换标签页：收起键盘 */
+  /** 切换标签页：收起键盘；回到「正文」时惰性刷新还原（源码可能已改） */
   const switchTab = (next: Tab) => {
     if (next === tab) return;
     Keyboard.dismiss();
     setTab(next);
+    if (next === 'body') refreshBodyMarkdown();
   };
 
   const hasChanges = dirty || metadataDirty || isNew;

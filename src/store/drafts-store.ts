@@ -1,7 +1,43 @@
 // 草稿管理：撰写中的文章/知识词条自动缓存到本机，退出重进后可选择恢复
+// 0.0.15.8：只有「真正编辑过」的表单才写入草稿箱——点开撰写没写任何内容不再产生未命名草稿；
+// 会话中创建过草稿后又把内容全部撤销回默认值的，该草稿会被清掉
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { defaultForm } from './compose-store';
+import { defaultKnowledgeForm } from './knowledge-store';
 import type { ArticleFormData, ComposeKind, KnowledgeEntryFormData } from '../types';
+
+/** 文章表单相对默认值是否有真实编辑（标题/正文/标签/日期/作者/开关等任一偏离即算） */
+export function articleFormEdited(form: ArticleFormData): boolean {
+  if (
+    form.title?.trim() ||
+    form.titleEn?.trim() ||
+    form.bodyMarkdown?.trim() ||
+    form.footerNote?.trim() ||
+    form.recordingDuration?.trim()
+  ) return true;
+  if ((form.tags?.length ?? 0) > 0) return true;
+  if ((form.footnotes ?? []).some((f) => f?.trim())) return true;
+  if (form.isNews || form.includeMathJax || form.hidden) return true;
+  if (form.articleType && form.articleType !== defaultForm.articleType) return true;
+  if (form.category && form.category !== defaultForm.category) return true;
+  if (form.author && form.author !== defaultForm.author) return true;
+  if (form.createDate && form.createDate !== defaultForm.createDate) return true;
+  return false;
+}
+
+/** 知识词条表单相对默认值是否有真实编辑 */
+export function knowledgeFormEdited(form: KnowledgeEntryFormData): boolean {
+  if (
+    form.title?.trim() ||
+    form.titleEn?.trim() ||
+    form.aliases?.trim() ||
+    form.bodyMarkdown?.trim()
+  ) return true;
+  if (form.category && form.category !== defaultKnowledgeForm.category) return true;
+  if (form.createDate && form.createDate !== defaultKnowledgeForm.createDate) return true;
+  return false;
+}
 
 /** 草稿表单：文章草稿或知识词条草稿（kind 区分） */
 export type DraftForm = ArticleFormData | KnowledgeEntryFormData;
@@ -36,9 +72,22 @@ export const useDraftsStore = create<DraftsState>((set, get) => ({
   init: async () => {
     try {
       const raw = await AsyncStorage.getItem(DRAFTS_KEY);
-      const list: Draft[] = raw ? JSON.parse(raw) : [];
+      let list: Draft[] = raw ? JSON.parse(raw) : [];
       if (Array.isArray(list)) {
-        set({ drafts: sortByUpdated(list), loaded: true });
+        // 清理历史遗留的空草稿（旧版本点开撰写页就会保存的「未命名」冗余草稿）
+        const cleaned = list.filter((d) => {
+          if (!d || !d.form) return false;
+          if (d.kind === 'knowledge') return knowledgeFormEdited(d.form as KnowledgeEntryFormData);
+          return articleFormEdited(d.form as ArticleFormData);
+        });
+        set({ drafts: sortByUpdated(cleaned), loaded: true });
+        if (cleaned.length !== list.length) {
+          try {
+            await AsyncStorage.setItem(DRAFTS_KEY, JSON.stringify(cleaned));
+          } catch {
+            // 持久化失败不阻塞
+          }
+        }
       } else {
         set({ drafts: [], loaded: true });
       }

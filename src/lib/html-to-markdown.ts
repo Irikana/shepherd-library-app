@@ -1,10 +1,13 @@
 // HTML → Markdown 正文转换（编辑已有文章时，把正文区段 HTML 还原为 Markdown 供撰写式编辑）
 // 使用 turndown 转换标准标签；视觉组件（div[class]/details/table 等）保留原 HTML 透传
 // （这些组件在撰写页 MarkdownEditor 中本来就是以 HTML 片段插入的，保留原样往返无损）
+// 注意：RN 里 turndown 必须走 Node 版构建（domino 解析器），Metro 的 browser 字段重映射会导致
+// 还原必败——已在 metro.config.js 固定，见该文件注释。
 import TurndownService from 'turndown';
 
-/** 正文区段 HTML → Markdown；异常时返回 null（调用方提示改用源码编辑） */
+/** 正文区段 HTML → Markdown；空正文返回空串；异常时返回 null（调用方提示改用源码编辑） */
 export function htmlToMarkdown(bodyHtml: string): string | null {
+  if (!bodyHtml || !bodyHtml.trim()) return '';
   try {
     const td = new TurndownService({
       headingStyle: 'atx',
