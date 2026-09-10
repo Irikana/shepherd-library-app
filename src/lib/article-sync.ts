@@ -113,10 +113,12 @@ export function insertSearchEntry(
   const marker = 'data: [';
   const idx = js.indexOf(marker);
   if (idx < 0) return js;
-  // 防重复：urlPath 已存在于搜索数据中
-  const urlPattern = `ROOT+'${entry.urlPath}'`;
-  if (js.includes(urlPattern)) return js;
-  const line = `      {t:'${escapeJsString(entry.title)}',u:toAbs(ROOT+'${entry.urlPath}'),k:'${escapeJsString(entry.keywords)}'},`;
+  // 文件名可能含撇号等 JS 特殊字符，urlPath 必须与 title/keywords 同样转义，
+  // 否则插入的条目会使整个 library-dynamic.js 语法错误、全站动态功能瘫痪
+  const escapedPath = escapeJsString(entry.urlPath);
+  // 防重复：urlPath 已存在于搜索数据中（同时匹配原始与转义形态的历史条目）
+  if (js.includes(`ROOT+'${entry.urlPath}'`) || js.includes(`ROOT+'${escapedPath}'`)) return js;
+  const line = `      {t:'${escapeJsString(entry.title)}',u:toAbs(ROOT+'${escapedPath}'),k:'${escapeJsString(entry.keywords)}'},`;
   return js.slice(0, idx + marker.length) + '\n' + line + js.slice(idx + marker.length);
 }
 
