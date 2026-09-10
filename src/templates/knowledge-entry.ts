@@ -3,6 +3,7 @@
 // 上传路径：knowledge-hall/categories/{分类}/xxx.html
 import { marked } from 'marked';
 import type { KnowledgeEntryFormData, KnowledgeCategory } from '../types';
+import { siteHeadExtras } from './site-assets';
 
 /** 将 YYYY-MM-DD 格式化为 YYYY年M月D日 */
 export function formatDateCN(dateStr: string): string {
@@ -69,6 +70,7 @@ export function generateKnowledgeEntryHtml(data: KnowledgeEntryFormData): string
   <meta property="og:locale" content="zh_CN">
   <link rel="preload" href="../../css/style.css" as="style">
   <link rel="stylesheet" href="../../css/style.css">
+  ${siteHeadExtras('../../')}
   <style>
     .kh-body { display: flex; min-height: 100vh; }
     .kh-sidebar {

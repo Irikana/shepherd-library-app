@@ -3,7 +3,8 @@
 import { marked } from 'marked';
 import type { ArticleFormData, ArticleType } from '../types';
 import { ARTICLE_CATEGORIES } from './article-sync';
-import { formatDateCN } from '../templates/article';
+import { formatDateCN, renderTags } from '../templates/article';
+import type { TagColorMap } from './tag-colors';
 
 /** 判断 HTML 是否为 App 生成的文章页（class token 匹配，兼容 class="section-padding page-title-main" 多类名） */
 function hasClassToken(html: string, token: string): boolean {
@@ -66,7 +67,8 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
   const tagsSectionMatch = html.match(/标签：<\/span>\s*<span class="article-meta-value">\s*([\s\S]*?)<\/span>\s*<\/div>/);
   const tags: string[] = [];
   if (tagsSectionMatch) {
-    const tagRegex = /<span class="article-tag[^"]*">([\s\S]*?)<\/span>/g;
+    // 兼容带内联颜色样式的标签：<span class="article-tag tag-ai" style="...">
+    const tagRegex = /<span class="article-tag[^"]*"[^>]*>([\s\S]*?)<\/span>/g;
     let m: RegExpExecArray | null;
     while ((m = tagRegex.exec(tagsSectionMatch[1])) !== null) {
       const tagText = extractText(m[1]);
@@ -133,19 +135,6 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
   };
 }
 
-/** 渲染标签 spans（与 article.ts 模板一致；无标签时显示"无"字） */
-function renderTags(tags: string[]): string {
-  if (!tags.length) return '无';
-  return tags
-    .map((tag) => {
-      if (tag === '包含AI') return '<span class="article-tag tag-ai">包含AI</span>';
-      if (tag === '有删减') return '<span class="article-tag tag-edited">有删减</span>';
-      if (tag === '小说') return '<span class="article-tag tag-novel">小说</span>';
-      return `<span class="article-tag">${escapeHtml(tag)}</span>`;
-    })
-    .join('\n        ');
-}
-
 /** 渲染文章性质徽标 */
 function renderTypeBadge(articleType: string): string {
   if (articleType === '实验性文章') {
@@ -155,7 +144,7 @@ function renderTypeBadge(articleType: string): string {
 }
 
 /** 构建元数据区段 HTML（与 article.ts generateArticleHtml 一致） */
-function buildMetaSection(form: ArticleFormData): string {
+function buildMetaSection(form: ArticleFormData, tagColors: TagColorMap = {}): string {
   const dateCN = formatDateCN(form.createDate);
   const metaItems: string[] = [
     `      <div class="article-meta-item">
@@ -173,7 +162,7 @@ function buildMetaSection(form: ArticleFormData): string {
     `      <div class="article-meta-item">
           <span class="article-meta-label">标签：</span>
           <span class="article-meta-value">
-        ${renderTags(form.tags)}
+        ${renderTags(form.tags, tagColors)}
           </span>
         </div>`,
   ];
@@ -246,9 +235,10 @@ const FOOTNOTE_STYLE = `\n<style>
  * 将更新后的元数据写回文章 HTML（保留正文 HTML 不变）
  * @param html 原始文章 HTML（或源码编辑器中修改后的 HTML）
  * @param form 更新后的元数据
+ * @param tagColors 标签颜色表（站点配置 tagColors）；设置过颜色的标签会带内联样式
  * @returns 合并后的完整 HTML
  */
-export function updateArticleHtml(html: string, form: ArticleFormData): string {
+export function updateArticleHtml(html: string, form: ArticleFormData, tagColors: TagColorMap = {}): string {
   let result = html;
 
   // 1. 更新 <title> 标签
@@ -264,7 +254,7 @@ export function updateArticleHtml(html: string, form: ArticleFormData): string {
   );
 
   // 3. 替换元数据区段（深度匹配 article-meta 自身闭合，兼容其后为任意正文结构的页面）
-  const newMetaSection = buildMetaSection(form);
+  const newMetaSection = buildMetaSection(form, tagColors);
   const metaOpen = findDivByClassToken(result, 'article-meta');
   if (metaOpen >= 0) {
     const metaClose = matchDivEnd(result, metaOpen);
@@ -531,22 +521,64 @@ function unwrapBodyRegion(region: string): { openTag: string; inner: string } | 
   return null;
 }
 
-/** 提取正文区段内部 HTML（不含结构容器标签），非文章结构或未找到时返回 null */
-export function extractBodyHtml(html: string): string | null {
-  const range = findMetaBodyRange(html) ?? findLeftAlignRange(html);
+/** 内容页面（非文章页）的正文容器候选，按优先级排列 */
+const PAGE_BODY_CONTAINERS = ['content-main', 'kh-main', 'kh-content', 'left-align'];
+
+/**
+ * 定位内容页面的正文容器范围：library 之外的页面（入口页、说明页、知识馆页、主页板块等）
+ * 依次尝试 .content-main / .kh-main / .kh-content / .left-align 容器，再兜底 <main> 元素。
+ */
+function findPageBodyRange(html: string): { start: number; end: number } | null {
+  for (const token of PAGE_BODY_CONTAINERS) {
+    const open = findDivByClassToken(html, token);
+    if (open < 0) continue;
+    const tagEnd = html.indexOf('>', open);
+    const close = matchDivEnd(html, open);
+    if (tagEnd < 0 || close < 0 || close <= tagEnd) continue;
+    if (!html.slice(tagEnd + 1, close).trim()) continue; // 空容器不可编辑
+    return { start: tagEnd + 1, end: close };
+  }
+  const mainOpen = /<main\b[^>]*>/i.exec(html);
+  if (mainOpen) {
+    const start = mainOpen.index + mainOpen[0].length;
+    const close = matchTagEnd(html, mainOpen.index, 'main');
+    if (close > start && html.slice(start, close).trim()) return { start, end: close };
+  }
+  return null;
+}
+
+/**
+ * 判断 HTML 是否为「可正文编辑的内容页面」（不含 article-meta 的站点页面）。
+ * 文章页由 isArticleHtml 负责，两者互斥。
+ */
+export function isPageHtml(html: string): boolean {
+  if (!html || isArticleHtml(html)) return false;
+  return findPageBodyRange(html) !== null;
+}
+
+/** 定位正文区段范围：文章页优先，其次内容页面容器 */
+function locateBodyRange(html: string, isArticle: boolean): { start: number; end: number } | null {
+  if (isArticle) return findMetaBodyRange(html) ?? findLeftAlignRange(html) ?? findPageBodyRange(html);
+  return findPageBodyRange(html) ?? findLeftAlignRange(html);
+}
+
+/** 提取正文区段内部 HTML（不含结构容器标签）；文章页与内容页面均支持，找不到时返回 null */
+export function extractBodyHtml(html: string, isArticle = true): string | null {
+  const range = locateBodyRange(html, isArticle);
   if (!range) return null;
   const region = html.slice(range.start, range.end);
-  const unw = unwrapBodyRegion(region);
+  // 内容页面：容器本身就是编辑边界，不再拆包（避免误把整页结构吸进正文）
+  const unw = isArticle ? unwrapBodyRegion(region) : null;
   return unw ? unw.inner : region.trim();
 }
 
 /** 用新正文 HTML 替换正文区段内容；未找到正文区段时原样返回 */
-export function replaceBodyHtml(html: string, bodyHtml: string): string {
-  const range = findMetaBodyRange(html) ?? findLeftAlignRange(html);
+export function replaceBodyHtml(html: string, bodyHtml: string, isArticle = true): string {
+  const range = locateBodyRange(html, isArticle);
   if (!range) return html;
   const inner = bodyHtml.trim();
   const region = html.slice(range.start, range.end);
-  const unw = unwrapBodyRegion(region);
+  const unw = isArticle ? unwrapBodyRegion(region) : null;
   if (unw) {
     // 结构容器正文：只替换容器内部，开闭标签与区段首尾空白原样保留
     const leadWs = /^\s*/.exec(region)![0];
@@ -557,7 +589,28 @@ export function replaceBodyHtml(html: string, bodyHtml: string): string {
       html.slice(range.end)
     );
   }
-  return html.slice(0, range.start) + '\n        ' + inner + '\n      ' + html.slice(range.end);
+  const indent = isArticle ? '\n        ' : '\n      ';
+  return html.slice(0, range.start) + indent + inner + '\n      ' + html.slice(range.end);
+}
+
+/** 读取页面主标题（page-title-main 容器内容，文章页与内容页面通用）；不存在返回 null */
+export function getPageTitle(html: string): string | null {
+  const open = findDivByClassToken(html, 'page-title-main');
+  if (open < 0) return null;
+  const tagEnd = html.indexOf('>', open);
+  const close = matchDivEnd(html, open);
+  if (tagEnd < 0 || close < 0 || close <= tagEnd) return null;
+  return extractText(html.slice(tagEnd + 1, close));
+}
+
+/** 写回页面主标题（只替换该容器内部，保留 class 与缩进） */
+export function updatePageTitle(html: string, title: string): string {
+  const open = findDivByClassToken(html, 'page-title-main');
+  if (open < 0) return html;
+  const tagEnd = html.indexOf('>', open);
+  const close = matchDivEnd(html, open);
+  if (tagEnd < 0 || close < 0 || close <= tagEnd) return html;
+  return html.slice(0, tagEnd + 1) + escapeHtml(title) + html.slice(close);
 }
 
 /**

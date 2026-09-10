@@ -3,6 +3,8 @@
 // 0.0.7：相对路径随分类目录深度自适应（修复 misc/experimental 等深层目录下 CSS/JS/图片失效）
 import { marked } from 'marked';
 import type { ArticleFormData } from '../types';
+import { tagInlineStyleCss, type TagColorMap } from '../lib/tag-colors';
+import { siteHeadExtras } from './site-assets';
 
 /** 将 YYYY-MM-DD 格式化为 YYYY年M月D日 */
 export function formatDateCN(dateStr: string): string {
@@ -20,15 +22,18 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** 渲染标签 spans（内置标签带专属类名，自定义标签用通用样式；无标签时显示"无"字） */
-function renderTags(tags: string[]): string {
+/** 渲染标签 spans（内置标签带专属类名，自定义标签用通用样式；无标签时显示"无"字）
+ * 用户在站点配置里为该标签设过颜色时，追加内联样式覆写（浅色/深色主题均成立） */
+export function renderTags(tags: string[], tagColors: TagColorMap = {}): string {
   if (!tags.length) return '无';
   return tags
     .map((tag) => {
-      if (tag === '包含AI') return '<span class="article-tag tag-ai">包含AI</span>';
-      if (tag === '有删减') return '<span class="article-tag tag-edited">有删减</span>';
-      if (tag === '小说') return '<span class="article-tag tag-novel">小说</span>';
-      return `<span class="article-tag">${escapeHtml(tag)}</span>`;
+      const cls =
+        tag === '包含AI' ? ' tag-ai' :
+        tag === '有删减' ? ' tag-edited' :
+        tag === '小说' ? ' tag-novel' : '';
+      const css = tagInlineStyleCss(tagColors[tag]);
+      return `<span class="article-tag${cls}"${css ? ` style="${css}"` : ''}>${escapeHtml(tag)}</span>`;
     })
     .join('\n        ');
 }
@@ -112,9 +117,10 @@ MathJax = {
  * @param data 表单数据
  * @param categoryDir 目标分类目录（相对 library/，如 'paper'、'misc/experimental'）；
  *                    默认 'paper'。目录越深，相对路径的 ../ 前缀越多
+ * @param tagColors 标签颜色表（站点配置 tagColors）；设置过颜色的标签会带内联样式
  * @returns 完整 HTML 字符串（可直接 PUT 到 library/{categoryDir}/{标题}.html）
  */
-export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'): string {
+export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper', tagColors: TagColorMap = {}): string {
   const dateCN = formatDateCN(data.createDate);
   const titleSafe = escapeHtml(data.title);
 
@@ -163,7 +169,7 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
     `      <div class="article-meta-item">
           <span class="article-meta-label">标签：</span>
           <span class="article-meta-value">
-        ${renderTags(data.tags)}
+        ${renderTags(data.tags, tagColors)}
           </span>
         </div>`,
   ];
@@ -233,6 +239,7 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
 <meta name="description" content="牧羊人图书馆 - 存放所有知识之地">
 <meta name="keywords" content="图书馆,知识,学习,牧羊人">
 <link rel="stylesheet" href="${rootPrefix}css/style.css">
+  ${siteHeadExtras(rootPrefix)}
 ${footnoteStyle}
 ${data.includeMathJax ? MATHJAX_HEAD : ''}
 </head>

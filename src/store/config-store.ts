@@ -10,10 +10,13 @@ import {
   DEFAULT_UPLOAD_DIRS,
   EMPTY_CUSTOM,
   SITE_CONFIG_PATH,
+  parseSiteConfig,
   slugifyDir,
+  type ContactChannel,
   type SiteConfigCustom,
   type UploadDir,
 } from '../lib/site-config';
+import type { TagColorMap } from '../lib/tag-colors';
 
 const CACHE_KEY = 'slywrite-site-config';
 
@@ -29,8 +32,12 @@ interface ConfigState {
   categories: ArticleCategory[];
   /** 合并后的标签（内置 + 自定义） */
   tags: string[];
+  /** 标签颜色（标签名 → #rrggbb；缺省表示跟随主题默认色） */
+  tagColors: TagColorMap;
   /** 合并后的上传目录（内置 + 自定义） */
   uploadDirs: UploadDir[];
+  /** 网站联系方式（冻结顶栏「联系」下拉菜单数据源，作者自行填写） */
+  contact: ContactChannel[];
   /** 自定义项（与仓库配置一致） */
   custom: SiteConfigCustom;
   /** 仓库配置文件 sha（更新用） */
@@ -51,10 +58,14 @@ interface ConfigState {
   /** 创建自定义分类（同步写入仓库配置文件 + library.html 中英文版章节） */
   addCategory: (input: NewCategoryInput) => Promise<{ ok: boolean; error?: string }>;
   removeCategory: (key: string) => Promise<{ ok: boolean; error?: string }>;
-  addTag: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  addTag: (name: string, color?: string | null) => Promise<{ ok: boolean; error?: string }>;
   removeTag: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  /** 设置标签颜色（null = 清除自定义颜色，跟随主题）；内置与自定义标签都可设置 */
+  setTagColor: (name: string, color: string | null) => Promise<{ ok: boolean; error?: string }>;
   addUploadDir: (label: string, value: string) => Promise<{ ok: boolean; error?: string }>;
   removeUploadDir: (value: string) => Promise<{ ok: boolean; error?: string }>;
+  /** 保存网站联系方式（整组写回站点配置，网站冻结顶栏读取） */
+  saveContact: (items: ContactChannel[]) => Promise<{ ok: boolean; error?: string }>;
 }
 
 function mergeCategories(custom: ArticleCategory[]): ArticleCategory[] {
@@ -78,11 +89,20 @@ function mergeUploadDirs(custom: UploadDir[]): UploadDir[] {
   ];
 }
 
+/** 只保留仍然存在的标签的颜色设置，避免配置文件里堆积孤儿项 */
+function pruneTagColors(colors: TagColorMap, tags: string[]): TagColorMap {
+  const out: TagColorMap = {};
+  for (const t of tags) if (colors[t]) out[t] = colors[t];
+  return out;
+}
+
 export const useConfigStore = create<ConfigState>((set, get) => ({
   categories: ARTICLE_CATEGORIES,
   tags: DEFAULT_TAGS,
+  tagColors: {},
   uploadDirs: DEFAULT_UPLOAD_DIRS,
-  custom: { ...EMPTY_CUSTOM, categories: [], tags: [], uploadDirs: [] },
+  contact: [],
+  custom: { ...EMPTY_CUSTOM, categories: [], tags: [], tagColors: {}, uploadDirs: [], contact: [] },
   sha: null,
   loaded: false,
   saving: false,
@@ -92,18 +112,15 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     // 仓库配置优先，失败（离线/404）回退本地缓存
     try {
       const { content, sha } = await getFile(SITE_CONFIG_PATH);
-      const parsed = JSON.parse(content) as Partial<SiteConfigCustom>;
-      const custom: SiteConfigCustom = {
-        categories: Array.isArray(parsed?.categories) ? parsed.categories : [],
-        tags: Array.isArray(parsed?.tags) ? parsed.tags.filter((t) => typeof t === 'string') : [],
-        uploadDirs: Array.isArray(parsed?.uploadDirs) ? parsed.uploadDirs : [],
-      };
+      const custom = parseSiteConfig(content);
       set({
         custom,
         sha,
         categories: mergeCategories(custom.categories),
         tags: mergeTags(custom.tags),
+        tagColors: custom.tagColors,
         uploadDirs: mergeUploadDirs(custom.uploadDirs),
+        contact: custom.contact,
         loaded: true,
         syncError: null,
       });
@@ -114,12 +131,14 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
     try {
       const raw = await AsyncStorage.getItem(CACHE_KEY);
-      const custom = raw ? (JSON.parse(raw) as SiteConfigCustom) : { ...EMPTY_CUSTOM, categories: [], tags: [], uploadDirs: [] };
+      const custom = raw ? parseSiteConfig(raw) : { ...EMPTY_CUSTOM, categories: [], tags: [], tagColors: {}, uploadDirs: [], contact: [] };
       set({
         custom,
         categories: mergeCategories(custom.categories ?? []),
         tags: mergeTags(custom.tags ?? []),
+        tagColors: custom.tagColors ?? {},
         uploadDirs: mergeUploadDirs(custom.uploadDirs ?? []),
+        contact: custom.contact ?? [],
         loaded: true,
       });
     } catch {
@@ -229,23 +248,42 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     return { ok: true };
   },
 
-  addTag: async (name: string) => {
+  addTag: async (name: string, color?: string | null) => {
     const n = name.trim();
     if (!n) return { ok: false, error: '标签名称不能为空' };
     if (get().tags.includes(n)) return { ok: false, error: '该标签已存在' };
-    const next: SiteConfigCustom = { ...get().custom, tags: [...get().custom.tags, n] };
+    const tagColors = color ? { ...get().custom.tagColors, [n]: color } : get().custom.tagColors;
+    const next: SiteConfigCustom = { ...get().custom, tags: [...get().custom.tags, n], tagColors };
     const persisted = await get().persist(next);
     if (!persisted.ok) return persisted;
-    set({ custom: next, tags: mergeTags(next.tags) });
+    set({ custom: next, tags: mergeTags(next.tags), tagColors });
     return { ok: true };
   },
 
   removeTag: async (name: string) => {
     if (DEFAULT_TAGS.includes(name)) return { ok: false, error: '内置标签不可删除' };
-    const next: SiteConfigCustom = { ...get().custom, tags: get().custom.tags.filter((t) => t !== name) };
+    const tags = get().custom.tags.filter((t) => t !== name);
+    const next: SiteConfigCustom = {
+      ...get().custom,
+      tags,
+      tagColors: pruneTagColors(get().custom.tagColors, [...DEFAULT_TAGS, ...tags]),
+    };
     const persisted = await get().persist(next);
     if (!persisted.ok) return persisted;
-    set({ custom: next, tags: mergeTags(next.tags) });
+    set({ custom: next, tags: mergeTags(next.tags), tagColors: next.tagColors });
+    return { ok: true };
+  },
+
+  setTagColor: async (name: string, color: string | null) => {
+    const n = name.trim();
+    if (!n) return { ok: false, error: '标签名称不能为空' };
+    const tagColors: TagColorMap = { ...get().custom.tagColors };
+    if (color) tagColors[n] = color;
+    else delete tagColors[n];
+    const next: SiteConfigCustom = { ...get().custom, tagColors };
+    const persisted = await get().persist(next);
+    if (!persisted.ok) return persisted;
+    set({ custom: next, tagColors });
     return { ok: true };
   },
 
@@ -281,6 +319,23 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const persisted = await get().persist(next);
     if (!persisted.ok) return persisted;
     set({ custom: next, uploadDirs: mergeUploadDirs(next.uploadDirs) });
+    return { ok: true };
+  },
+
+  saveContact: async (items: ContactChannel[]) => {
+    const cleaned: ContactChannel[] = items
+      .filter((it) => it && (it.label.trim() || it.value.trim() || it.url.trim()))
+      .map((it) => ({
+        key: it.key.trim() || `ch-${Date.now().toString(36)}`,
+        label: it.label.trim(),
+        value: it.value.trim(),
+        url: it.url.trim(),
+        note: it.note.trim(),
+      }));
+    const next: SiteConfigCustom = { ...get().custom, contact: cleaned };
+    const persisted = await get().persist(next);
+    if (!persisted.ok) return persisted;
+    set({ custom: next, contact: cleaned });
     return { ok: true };
   },
 }));

@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from
 import { SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
 import { useConfigStore } from '../store/config-store';
+import { TagChips } from './TagChips';
 import { DatePickerModal } from './DatePickerModal';
 import { TimePickerModal } from './TimePickerModal';
 import type { ArticleType } from '../types';
@@ -212,42 +213,9 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
         </>
       )}
 
-      {/* 标签 */}
+      {/* 标签（颜色可设置，见 TagChips） */}
       <Text style={s.label}>标签</Text>
-      <View style={s.chipRow}>
-        {allTags.map((tag) => {
-          const active = form.tags.includes(tag);
-          return (
-            <Pressable
-              key={tag}
-              style={[
-                s.chip,
-                active && tag === '新闻' && s.chipNews,
-                active && tag === '包含AI' && s.chipAi,
-                active && tag === '有删减' && s.chipEdited,
-                active && tag === '小说' && s.chipNovel,
-                active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && tag !== '小说' && s.chipActive,
-                lockedMeta && s.btnDisabled,
-              ]}
-              onPress={() => toggleTag(tag)}
-              disabled={lockedMeta}
-            >
-              <Text
-                style={[
-                  s.chipText,
-                  active && tag === '新闻' && s.chipTextNews,
-                  active && tag === '包含AI' && s.chipTextAi,
-                  active && tag === '有删减' && s.chipTextEdited,
-                  active && tag === '小说' && s.chipTextNovel,
-                  active && tag !== '新闻' && tag !== '包含AI' && tag !== '有删减' && tag !== '小说' && s.chipTextActive,
-                ]}
-              >
-                {tag}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <TagChips all={allTags} selected={form.tags} onToggle={toggleTag} disabled={lockedMeta} />
 
       {/* 补充说明 */}
       <Text style={s.label}>补充说明（可选）</Text>

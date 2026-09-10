@@ -4,6 +4,8 @@
 // - 正文：撰写式体验——自动把正文区段 HTML 还原为 Markdown，用 MarkdownEditor（工具栏 + 数学符号）编辑，
 //   保存时渲染回 HTML；视觉组件（蓝框/灰引/Callout/折叠块等）原样保留
 // - 源码：编辑完整文件（含 head/脚本/导航等）
+// 非 library 文章的站点页面（入口页、说明页、知识馆页、主页板块等）自动识别为「内容页面」：
+// 提供「正文 / 源码」两标签页，并可直接修改页面主标题（page-title-main），同样用撰写式体验改内容
 // 滚动：正文/源码统一使用 CodeEditor/MarkdownEditor（外层 ScrollView 唯一滚动 + 内部输入框不限制高度），
 // 避免 Android 上 TextInput 内部滚动与父级手势冲突导致的"滑到底部"问题
 import React, { useEffect, useRef, useState } from 'react';
@@ -21,6 +23,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { putFile, getFile } from '../src/lib/github-client';
 import { useEditorStore } from '../src/store/editor-store';
+import { useConfigStore } from '../src/store/config-store';
 import { updateArticleHtml } from '../src/lib/article-parser';
 import { insertIntoLibraryHtml, removeFromLibraryHtml } from '../src/lib/article-sync';
 import type { ArticleCategory } from '../src/lib/article-sync';
@@ -163,6 +166,15 @@ const ARTICLE_TABS: { key: Tab; label: string }[] = [
   { key: 'source', label: '源码' },
 ];
 
+/** 内容页面（非文章）的编辑标签页：无元数据表单，正文容器 + 整页源码 */
+const PAGE_TABS: { key: Tab; label: string }[] = [
+  { key: 'body', label: '正文' },
+  { key: 'source', label: '源码' },
+];
+
+/** 普通文本文件的标签页 */
+const PLAIN_TABS: { key: Tab; label: string }[] = [{ key: 'source', label: '源码' }];
+
 export default function EditorScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ path?: string; name?: string }>();
@@ -177,6 +189,10 @@ export default function EditorScreen() {
     isNew,
     dirty,
     isArticle,
+    isPage,
+    canEditBody,
+    pageTitle,
+    setPageTitle,
     metadata,
     metadataDirty,
     bodyMarkdown,
@@ -193,6 +209,15 @@ export default function EditorScreen() {
   const [newDir, setNewDir] = useState(NEW_FILE_ROOTS[0].value);
   const [newFileName, setNewFileName] = useState('');
   const [tab, setTab] = useState<Tab>('meta');
+
+  /** 当前文件可用的标签页：文章三页 / 内容页面两页 / 普通文件仅源码 */
+  const tabs = isNew ? PLAIN_TABS : isArticle ? ARTICLE_TABS : canEditBody ? PAGE_TABS : PLAIN_TABS;
+
+  // 内容页面与普通文件没有「元数据」页：加载完成后落在正文（或源码）页
+  useEffect(() => {
+    if (isNew) return;
+    if (tab === 'meta' && !isArticle) setTab(canEditBody ? 'body' : 'source');
+  }, [isNew, isArticle, canEditBody, tab]);
 
   // 从文件浏览器进入：读取 store 中已加载的内容（browser.tsx 中先加载再跳转）
   useEffect(() => {
@@ -233,7 +258,7 @@ export default function EditorScreen() {
     let saveContent = content;
     let hiddenChanged = false;
     if (isArticle && metadataDirty && metadata) {
-      saveContent = updateArticleHtml(content, metadata);
+      saveContent = updateArticleHtml(content, metadata, useConfigStore.getState().tagColors);
       // 检测 hidden 是否真的变了（对比原始内容）
       const wasHidden = originalContent.includes('data-article-hidden="true"');
       hiddenChanged = wasHidden !== metadata.hidden;
@@ -353,10 +378,10 @@ export default function EditorScreen() {
         </Text>
       </View>
 
-      {/* 文章元数据/正文/源码切换标签 + 锁定开关 */}
-      {isArticle && !isNew && (
+      {/* 元数据/正文/源码切换标签 + 锁定开关（内容页面省略元数据页） */}
+      {!isNew && (
         <View style={s.tabs}>
-          {ARTICLE_TABS.map((t) => (
+          {tabs.map((t) => (
             <Pressable
               key={t.key}
               style={[s.tab, tab === t.key && s.tabActive]}
@@ -376,8 +401,9 @@ export default function EditorScreen() {
           </Pressable>
         </View>
       )}
-      {(isArticle && !isNew) && (
+      {!isNew && (
         <Text style={s.lockHint}>
+          {isPage ? '内容页面：正文容器与页面标题可编辑；' : ''}
           锁定后当前页只读，切换查看不会误触；{locked.meta || locked.body || locked.source ? '已锁定' : '未锁定'}
         </Text>
       )}
@@ -410,18 +436,33 @@ export default function EditorScreen() {
         </View>
       )}
 
-      {/* 编辑器主体：文章 → 元数据/正文/源码；普通文件 → 源码 */}
+      {/* 编辑器主体：文章 → 元数据/正文/源码；内容页面 → 正文（含页面标题）/源码；普通文件 → 源码 */}
       {isArticle && !isNew && tab === 'meta' ? (
         <View style={s.editorArea}>
           <EditMetaForm />
         </View>
-      ) : isArticle && !isNew && tab === 'body' ? (
+      ) : canEditBody && !isNew && tab === 'body' ? (
         <View style={s.editorArea}>
           <View style={s.bodyHint}>
             <Text style={s.bodyHintText}>
-              Markdown 正文编辑：与撰写页一致，可插入视觉组件（蓝框/灰引/红警/Callout/折叠块）、数学公式与脚注
+              {isPage
+                ? '内容页面正文：编辑该页面正文容器的内容（Markdown 与站内 HTML 混排可保留），保存时只替换这一区段，页面骨架与脚本不动'
+                : 'Markdown 正文编辑：与撰写页一致，可插入视觉组件（蓝框/灰引/红警/Callout/折叠块）、数学公式与脚注'}
             </Text>
           </View>
+          {isPage && pageTitle !== null && (
+            <View style={s.titleRow}>
+              <Text style={s.titleLabel}>页面标题</Text>
+              <TextInput
+                style={s.titleInput}
+                value={pageTitle}
+                onChangeText={setPageTitle}
+                placeholder="页面主标题（page-title-main）"
+                placeholderTextColor={colors.textLight}
+                editable={!locked.body}
+              />
+            </View>
+          )}
           {bodyMarkdown === null ? (
             <View style={s.center}>
               <Text style={s.hint}>未能自动还原正文为 Markdown，请改用「源码」标签页编辑</Text>
@@ -545,6 +586,27 @@ const createStyles = (COLORS: Palette) =>
       borderColor: COLORS.border,
     },
     bodyHintText: { fontSize: 12, color: COLORS.textLight, lineHeight: 17 },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderBottomWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+    },
+    titleLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, width: 56 },
+    titleInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.sm,
+      fontSize: 14,
+      color: COLORS.text,
+      backgroundColor: COLORS.bg,
+    },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
     hint: { fontSize: 13, color: COLORS.textLight, textAlign: 'center', lineHeight: 19 },
     footer: {

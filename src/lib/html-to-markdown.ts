@@ -36,15 +36,25 @@ export function htmlToMarkdown(bodyHtml: string): string | null {
       'DIV', 'DETAILS', 'SUMMARY', 'TABLE', 'THEAD', 'TBODY', 'TFOOT',
       'TR', 'TH', 'TD', 'SECTION', 'FIGURE', 'FIGCAPTION',
     ]);
+    // 内容页面（非文章页）里的结构化块：带站点类名时同样原样保留，
+    // 否则 turndown 会剥掉标签与 class，保存回写后页面样式（章节标题、文章列表等）会丢失
+    const KEEP_CLASS_NODES = new Set([
+      'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'SPAN', 'FIGURE',
+    ]);
+    const STRUCTURED_CLASS =
+      /\b(section-title-text[\w-]*|subsection-header|sub-subsection-header|section-content|article-list|article-meta[\w-]*|article-footer-meta|article-tag|page-title-main|notice-header|kh-[\w-]+|content-[\w-]+|news-[\w-]+|callout[\w-]*|function-box[\w-]*|notice-box[\w-]*|quote-box[\w-]*|left-align|story-work)\b/;
     td.addRule('keepHtml', {
       filter: (node) => {
         const n = node.nodeName;
-        if (!KEEP_HTML_NODES.has(n)) return false;
-        if (n === 'DIV') {
-          // 仅保留带 class 的 div（视觉组件）；无 class 的普通 div 按默认 block 处理
-          return (node.getAttribute?.('class') ?? '').length > 0;
+        const cls = node.getAttribute?.('class') ?? '';
+        if (KEEP_HTML_NODES.has(n)) {
+          if (n === 'DIV') {
+            // 仅保留带 class 的 div（视觉组件）；无 class 的普通 div 按默认 block 处理
+            return cls.length > 0;
+          }
+          return true;
         }
-        return true;
+        return KEEP_CLASS_NODES.has(n) && STRUCTURED_CLASS.test(cls);
       },
       replacement: (_content, node) => {
         const html = (node as HTMLElement).outerHTML ?? '';

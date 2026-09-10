@@ -143,7 +143,7 @@ export default function ComposeArticleScreen() {
     }
     // 按所选分类目录生成（深层目录会自动调整相对路径前缀）
     const category = categories.find((c) => c.key === form.category) ?? categories[0];
-    const html = generateArticleHtml(form, category.dir);
+    const html = generateArticleHtml(form, category.dir, useConfigStore.getState().tagColors);
     const result = validateArticleHtml(html);
     if (!result.valid) {
       Alert.alert(

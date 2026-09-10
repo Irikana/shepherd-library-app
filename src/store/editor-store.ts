@@ -1,12 +1,18 @@
-// 内容编辑器状态（文件路径 + 内容 + 版本 sha + 文章元数据），供编辑器页面使用
+// 内容编辑器状态（文件路径 + 内容 + 版本 sha + 文章元数据 / 页面正文），供编辑器页面使用
+// 两类 HTML 都支持撰写式（Markdown）正文编辑：
+// - isArticle：library 下的 App 文章页（article-meta + page-title-main），可编辑元数据 + 正文
+// - isPage：其他页面（入口页、说明页、知识馆页、主页板块等），可编辑正文容器 + 页面主标题
 import { create } from 'zustand';
 import type { ArticleFormData, ArticleType } from '../types';
 import {
   extractBodyHtml,
+  getPageTitle,
   isArticleHtml,
+  isPageHtml,
   markdownToBodyHtml,
   parseArticleMetadata,
   replaceBodyHtml,
+  updatePageTitle,
 } from '../lib/article-parser';
 import { htmlToMarkdown } from '../lib/html-to-markdown';
 
@@ -28,6 +34,12 @@ export interface EditorState {
 
   /** 是否为 App 生成的文章 HTML（可使用元数据表单编辑） */
   isArticle: boolean;
+  /** 是否为「其他页面」的内容 HTML（无元数据表单，但支持正文与页面标题编辑） */
+  isPage: boolean;
+  /** 是否支持撰写式正文编辑（文章页或内容页面） */
+  canEditBody: boolean;
+  /** 页面主标题（page-title-main 内容；无该容器时为 null） */
+  pageTitle: string | null;
   /** 解析出的文章元数据（仅 isArticle 时有值） */
   metadata: ArticleFormData | null;
   /** 元数据是否已修改 */
@@ -44,7 +56,7 @@ export interface EditorState {
   /** 各标签页锁定状态（true = 只读防误触，与撰写页锁一致） */
   locked: { meta: boolean; body: boolean; source: boolean };
 
-  /** 加载文件进入编辑器（自动检测文章 HTML 并解析元数据） */
+  /** 加载文件进入编辑器（自动检测文章 HTML / 内容页面 HTML 并解析可编辑区段） */
   load: (path: string, content: string, sha?: string | null, name?: string) => void;
   /** 新建文件模式 */
   loadNew: () => void;
@@ -56,6 +68,8 @@ export interface EditorState {
   setBodyHtml: (bodyHtml: string) => void;
   /** 更新正文 Markdown（撰写式编辑；渲染为 HTML 并写回完整文件内容） */
   setBodyMarkdown: (markdown: string) => void;
+  /** 更新页面主标题（内容页面模式；写回 page-title-main 容器） */
+  setPageTitle: (title: string) => void;
   /** 更新元数据字段 */
   setMetadata: <K extends keyof ArticleFormData>(key: K, value: ArticleFormData[K]) => void;
   /** 切换标签（元数据表单用） */
@@ -68,6 +82,25 @@ export interface EditorState {
   markSaved: (path: string, sha: string | null) => void;
 }
 
+/** 由内容重新推导可编辑状态（load / markSaved 共用） */
+function deriveEditable(path: string, content: string) {
+  // en/ 英文版文章由网站同步生成，元数据结构为英文标签，不做表单编辑（避免误改英文版）；
+  // 但正文容器仍可编辑
+  const article = !path.startsWith('en/') && isArticleHtml(content) ? parseArticleMetadata(content, path) : null;
+  const isPage = !article && isPageHtml(content);
+  const canEditBody = !!article || isPage;
+  const bodyHtml = canEditBody ? extractBodyHtml(content, !!article) : null;
+  return {
+    isArticle: !!article,
+    isPage,
+    canEditBody,
+    pageTitle: canEditBody && !article ? getPageTitle(content) : null,
+    metadata: article,
+    bodyHtml,
+    bodyMarkdown: bodyHtml !== null ? htmlToMarkdown(bodyHtml) : null,
+  };
+}
+
 export const useEditorStore = create<EditorState>((set) => ({
   path: '',
   name: '',
@@ -77,6 +110,9 @@ export const useEditorStore = create<EditorState>((set) => ({
   isNew: false,
   dirty: false,
   isArticle: false,
+  isPage: false,
+  canEditBody: false,
+  pageTitle: null,
   metadata: null,
   metadataDirty: false,
   bodyHtml: null,
@@ -86,10 +122,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   locked: { meta: false, body: false, source: false },
 
   load: (path, content, sha = null, name) => {
-    // 检测是否为文章 HTML，如果是则解析元数据
-    // en/ 英文版文章由网站同步生成，元数据结构为英文标签，不做表单编辑（避免误改英文版）
-    const article = !path.startsWith('en/') && isArticleHtml(content) ? parseArticleMetadata(content, path) : null;
-    const bodyHtml = article ? extractBodyHtml(content) : null;
+    const derived = deriveEditable(path, content);
     set({
       path,
       name: name ?? path.split('/').pop() ?? '',
@@ -98,15 +131,11 @@ export const useEditorStore = create<EditorState>((set) => ({
       sha,
       isNew: false,
       dirty: false,
-      isArticle: !!article,
-      metadata: article,
       metadataDirty: false,
-      bodyHtml,
-      // 提取成功（含空正文）就尝试还原；只有提取/转换失败才为 null（显示源码编辑提示）
-      bodyMarkdown: article && bodyHtml !== null ? htmlToMarkdown(bodyHtml) : null,
       bodyDirty: false,
       bodyStale: false,
       locked: { meta: false, body: false, source: false },
+      ...derived,
     });
   },
 
@@ -120,6 +149,9 @@ export const useEditorStore = create<EditorState>((set) => ({
       isNew: true,
       dirty: false,
       isArticle: false,
+      isPage: false,
+      canEditBody: false,
+      pageTitle: null,
       metadata: null,
       metadataDirty: false,
       bodyHtml: null,
@@ -134,28 +166,28 @@ export const useEditorStore = create<EditorState>((set) => ({
       // 源码可能修改了正文区段：同步重新提取（廉价字符串操作），并标记 Markdown 过期。
       // 不在每次击键都跑 HTML → Markdown 还原（大正文会卡输入），切回「正文」标签页时
       // 由 refreshBodyMarkdown 惰性刷新，保证正文页与源码页一致（避免旧 Markdown 覆盖源码编辑）
-      const bodyHtml = state.isArticle ? extractBodyHtml(content) : null;
+      const bodyHtml = state.canEditBody ? extractBodyHtml(content, state.isArticle) : null;
       return {
         content,
         bodyHtml,
-        bodyStale: state.isArticle,
-        bodyMarkdown: state.isArticle && bodyHtml === null ? null : state.bodyMarkdown,
+        bodyStale: state.canEditBody,
+        bodyMarkdown: state.canEditBody && bodyHtml === null ? null : state.bodyMarkdown,
+        pageTitle: state.isPage ? getPageTitle(content) : state.pageTitle,
         dirty: content !== state.originalContent,
       };
     }),
 
   refreshBodyMarkdown: () =>
     set((state) => {
-      if (!state.isArticle || !state.bodyStale) return {};
-      const bodyMarkdown =
-        state.bodyHtml !== null ? htmlToMarkdown(state.bodyHtml) : null;
+      if (!state.canEditBody || !state.bodyStale) return {};
+      const bodyMarkdown = state.bodyHtml !== null ? htmlToMarkdown(state.bodyHtml) : null;
       return { bodyMarkdown, bodyStale: false };
     }),
 
   setBodyHtml: (bodyHtml) =>
     set((state) => {
-      if (!state.isArticle) return {};
-      const content = replaceBodyHtml(state.content, bodyHtml);
+      if (!state.canEditBody) return {};
+      const content = replaceBodyHtml(state.content, bodyHtml, state.isArticle);
       return {
         bodyHtml,
         content,
@@ -165,9 +197,9 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   setBodyMarkdown: (markdown) =>
     set((state) => {
-      if (!state.isArticle || !state.metadata) return {};
-      const bodyHtml = markdownToBodyHtml(markdown, state.metadata.footnotes);
-      const content = replaceBodyHtml(state.content, bodyHtml);
+      if (!state.canEditBody) return {};
+      const bodyHtml = markdownToBodyHtml(markdown, state.metadata?.footnotes ?? []);
+      const content = replaceBodyHtml(state.content, bodyHtml, state.isArticle);
       return {
         bodyMarkdown: markdown,
         bodyHtml,
@@ -175,6 +207,17 @@ export const useEditorStore = create<EditorState>((set) => ({
         dirty: content !== state.originalContent,
         bodyDirty: true,
         bodyStale: false,
+      };
+    }),
+
+  setPageTitle: (title) =>
+    set((state) => {
+      if (state.pageTitle === null) return {};
+      const content = updatePageTitle(state.content, title);
+      return {
+        pageTitle: title,
+        content,
+        dirty: content !== state.originalContent,
       };
     }),
 
@@ -216,7 +259,7 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   markSaved: (path, sha) =>
     set((state) => {
-      const bodyHtml = state.isArticle ? extractBodyHtml(state.content) : null;
+      const derived = deriveEditable(path, state.content);
       return {
         path,
         name: state.name || path.split('/').pop() || '',
@@ -225,11 +268,10 @@ export const useEditorStore = create<EditorState>((set) => ({
         isNew: false,
         dirty: false,
         metadataDirty: false,
-        bodyHtml,
-        // 保存后重新以当前正文为基准还原 Markdown（保留撰写式编辑一致性）
-        bodyMarkdown: state.isArticle && bodyHtml !== null ? htmlToMarkdown(bodyHtml) : null,
         bodyDirty: false,
         bodyStale: false,
+        // 保存后重新以当前正文为基准还原 Markdown（保留撰写式编辑一致性）
+        ...derived,
       };
     }),
 }));
