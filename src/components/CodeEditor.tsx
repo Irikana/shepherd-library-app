@@ -4,6 +4,7 @@
 // 与父级手势冲突」导致的"滑到底部"反馈，长文件（HTML/CSS/JS 等）可正常滑动浏览。
 import React from 'react';
 import { ScrollView, StyleSheet, TextInput } from 'react-native';
+import { ReadOnlyText } from './ReadOnlyText';
 import { SPACING, useTheme, type Palette } from '../theme';
 
 interface CodeEditorProps {
@@ -13,13 +14,18 @@ interface CodeEditorProps {
   autoFocus?: boolean;
   /** 等宽字体（代码/HTML）还是正文字体（正文 HTML 编辑） */
   mono?: boolean;
-  /** 是否可编辑（默认 true；锁定态由外部传入 false） */
+  /** 是否可编辑（默认 true；锁定态由外部传入 false：可滑动浏览但不能编辑） */
   editable?: boolean;
 }
 
 export function CodeEditor({ value, onChangeText, placeholder, autoFocus, mono = true, editable = true }: CodeEditorProps) {
   const { colors } = useTheme();
   const s = createStyles(colors);
+  // 锁定态：Android 上 editable=false 的 TextInput 连内部滚动都会失效，
+  // 改用只读分块视图——保留滑动浏览能力，且绝对无法编辑。
+  if (!editable) {
+    return <ReadOnlyText text={value} mono={mono} hint="已锁定：可上下滑动浏览，不能编辑（解锁后恢复编辑）" />;
+  }
   return (
     <ScrollView
       style={s.scrollArea}
@@ -38,8 +44,9 @@ export function CodeEditor({ value, onChangeText, placeholder, autoFocus, mono =
         autoCapitalize="none"
         autoCorrect={false}
         autoFocus={autoFocus}
-        editable={editable}
-        showSoftInputOnFocus={editable}
+        editable
+        scrollEnabled={false}
+        showSoftInputOnFocus
       />
     </ScrollView>
   );

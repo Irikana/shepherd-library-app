@@ -40,12 +40,14 @@ export function getSiteCss(): Promise<string | null> {
  * 构建带网站样式的预览 HTML：
  * - 把 style.css 的 <link> 替换为内联 <style>（已含精修层），并移除精修层的 <link>
  * - 相对路径资源（图片等）由 WebView 的 baseUrl 解析（见 HtmlPreview）
+ * 链接写法兼容 ./css/、../css/、../../css/ 与无前缀（编辑器预览的是各深度真实页面，
+ * 早期只认 ../ 前缀，根目录页面（./css/style.css）会命中不了，预览就变成无样式）
  */
 export function buildPreviewHtml(html: string, css: string | null): string {
   if (!css) return html;
   return html
-    .replace(/<link rel="stylesheet" href="(?:\.\.\/)*css\/style\.css">/, `<style>\n${css}\n</style>`)
-    .replace(/\s*<link rel="stylesheet" href="(?:\.\.\/)*css\/library-refit\.css">/, '');
+    .replace(/<link rel="stylesheet" href="(?:\.{1,2}\/)*css\/style\.css">/, `<style>\n${css}\n</style>`)
+    .replace(/\s*<link rel="stylesheet" href="(?:\.{1,2}\/)*css\/library-refit\.css">/, '');
 }
 
 /** 预览 HTML 中相对资源解析的基地址（站点根） */

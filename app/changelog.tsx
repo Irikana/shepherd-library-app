@@ -1,9 +1,14 @@
-// 全部更新日志页：静态内置展示所有版本的更新日志，按版本升序展示（最初 → 最新）
+// 全部更新日志页：静态内置展示所有版本的更新日志，最新版本在最前（最新 → 最初）
 // 数据源：src/lib/changelog-data.ts（由 scripts/gen-changelog.js 从仓库 changelog/ 目录生成，随 App 发布内置，不联网）
 // 纯原生 Text 渲染，行内支持 `代码` 与 **加粗** 片段
 // 0.0.15.10：顶部新增可横向滑动的时间条——节点为菱形时间标记，进度线随当前版本平滑生长，
 //            点击进入时有轻微弹性缩放；时间条与下方日志卡片双向联动（点节点跳卡片，滚卡片带节点）
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// 0.0.15.11：时间条修复与改版——
+//            1) 轨道缺 flexDirection:'row'，导致除第一个节点外全部纵向堆叠被 66px 高度裁掉（看起来「只到某个版本，之后没渲染」）
+//            2) 游标同一个 Animated.View 上混用原生驱动（弹性缩放）与 JS 驱动（横向位移），点击即触发 RN 驱动冲突异常 → 白屏
+//               现统一为 JS 驱动，并把整页包进 ErrorBoundary，任何渲染异常都降级为提示而非白屏
+//            3) 排序调换：最新版本排最上面，时间条左端即最新
+import React, { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
@@ -65,10 +70,57 @@ function nodeCenter(i: number): number {
   return PAD_L + i * ITEM_W + ITEM_W / 2;
 }
 
-export default function ChangelogScreen() {
+/**
+ * 渲染异常兜底：时间条/日志卡片的任何渲染错误都不应把整页变成白屏，
+ * 降级为可读提示（保留返回能力）。
+ */
+class ChangelogErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error) {
+    // RN 无控制台面板，保留 log 便于真机调试
+    console.warn('changelog render failed:', error?.message);
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return <FallbackView />;
+  }
+}
+
+/** 兜底视图（独立组件，避免依赖主组件的样式实例） */
+function FallbackView() {
   const { colors } = useTheme();
   const s = createStyles(colors);
-  const logs: ChangelogEntry[] = CHANGELOG_DATA;
+  return (
+    <ScrollView style={s.container} contentContainerStyle={s.content}>
+      <Text style={s.sectionTitle}>全部更新日志</Text>
+      <View style={s.box}>
+        <Text style={s.hint}>
+          更新日志渲染失败。可返回上一页重新进入；若持续失败，说明内置日志数据异常，请反馈给作者。
+        </Text>
+      </View>
+    </ScrollView>
+  );
+}
+
+export default function ChangelogScreen() {
+  return (
+    <ChangelogErrorBoundary>
+      <ChangelogView />
+    </ChangelogErrorBoundary>
+  );
+}
+
+function ChangelogView() {
+  const { colors } = useTheme();
+  const s = createStyles(colors);
+  /** 展示顺序：最新在前（数据源由生成脚本保持时间升序，此处反转） */
+  const logs: ChangelogEntry[] = useMemo(() => [...CHANGELOG_DATA].reverse(), []);
   const count = logs.length;
 
   const listRef = useRef<ScrollView>(null);
@@ -90,7 +142,9 @@ export default function ChangelogScreen() {
   const contentWidth = useMemo(() => PAD_L * 2 + Math.max(1, count) * ITEM_W, [count]);
 
   useEffect(() => {
-    Animated.timing(enter, { toValue: 1, duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    // 入场动画走 JS 驱动：时间条内部另有 JS 驱动的游标与进度线，
+    // 父层用原生驱动会在 Android 上丢掉子层的 JS 更新
+    Animated.timing(enter, { toValue: 1, duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
   }, [enter]);
 
   /** 进度线宽度：从起点生长到当前节点中心（单版本时无需生长动画） */
@@ -112,7 +166,9 @@ export default function ChangelogScreen() {
       Animated.timing(ringX, { toValue: nodeCenter(i), duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
       if (fromBar) {
         ringPop.setValue(0.72);
-        Animated.spring(ringPop, { toValue: 1, friction: 3.6, tension: 160, useNativeDriver: true }).start();
+        // 与 ringX 同属一个 Animated.View，驱动方式必须一致（JS 驱动）：
+        // 混用原生驱动会在点击时抛「Driving the node on both native and JS driver」并白屏
+        Animated.spring(ringPop, { toValue: 1, friction: 3.6, tension: 160, useNativeDriver: false }).start();
         const y = cardOffsets.current[i];
         if (typeof y === 'number') listRef.current?.scrollTo({ y: Math.max(0, y - 6), animated: true });
       } else {
@@ -200,7 +256,7 @@ export default function ChangelogScreen() {
             ))}
           </View>
         </Animated.ScrollView>
-        <Text style={s.barHint}>左右滑动查看更早或更新的版本，点击节点直接跳到该版本说明</Text>
+        <Text style={s.barHint}>左端为最新版本，向右滑动回溯更早版本；点击节点直接跳到该版本说明</Text>
       </Animated.View>
 
       <ScrollView
@@ -212,7 +268,7 @@ export default function ChangelogScreen() {
       >
         <Text style={s.sectionTitle}>全部更新日志</Text>
         <Text style={s.hint}>
-          从最初版本到最新版本的完整迭代记录，随 App 版本内置，无需联网。
+          最新版本在前，向下依次回溯到最初版本；随 App 版本内置，无需联网。
           {` 当前共收录 ${count} 个版本。`}
         </Text>
 
@@ -280,8 +336,8 @@ function PressableItem({
       <Text style={[s.nodeLabel, active && s.nodeLabelActive, last && s.nodeLabelLast]} numberOfLines={1}>
         {label}
       </Text>
-      {first && <Text style={s.nodeEdge}>最初</Text>}
-      {last && <Text style={[s.nodeEdge, s.nodeEdgeRight]}>最新</Text>}
+      {first && <Text style={[s.nodeEdge, s.nodeEdgeRight]}>最新</Text>}
+      {last && <Text style={s.nodeEdge}>最初</Text>}
     </PressableCell>
   );
 }
@@ -317,7 +373,7 @@ const createStyles = (COLORS: Palette) =>
     barTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 0.5 },
     barCount: { fontSize: 11, color: COLORS.textLight },
     barContent: { paddingLeft: 0, paddingRight: SPACING.md },
-    barTrack: { height: 66, justifyContent: 'flex-start' },
+    barTrack: { height: 66, flexDirection: 'row', alignItems: 'flex-start' },
     trackLine: {
       position: 'absolute',
       left: 0,

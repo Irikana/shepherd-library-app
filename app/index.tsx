@@ -68,7 +68,7 @@ export default function HomeScreen() {
     },
     {
       title: '内容编辑',
-      desc: '浏览仓库文件树，编辑已有文章/新闻——元数据表单 + Markdown 正文 + 源码三种方式；也可编辑其他文本文件',
+      desc: '浏览仓库文件树，编辑已有文章/新闻——元数据表单 + Markdown 正文 + 源码 + 网站样式预览四种方式；文章可在编辑处直接展示或撤下新闻板块（含海报），锁定后仍可滑动浏览',
       href: '/browser',
       enabled: true,
     },
@@ -86,7 +86,7 @@ export default function HomeScreen() {
     },
     {
       title: '全部更新日志',
-      desc: '从最初版本到最新版本的完整迭代记录',
+      desc: '最新版本在前的完整迭代记录，顶部可滑动时间条与日志卡片联动',
       href: '/changelog',
       enabled: true,
     },

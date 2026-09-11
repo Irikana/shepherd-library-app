@@ -17,14 +17,20 @@ export interface NewsSyncOptions {
 }
 
 /**
- * 同步新闻板块（主页新闻区 / news.html / 英文主页）
+ * 新闻板块同步（主页新闻区 / news.html / 英文主页）
  * 各步骤独立 try/catch，单步失败不阻塞其余步骤；返回步骤说明
+ * 失败说明一定带上具体原因（历史教训：静默「可手动添加」让 Opus 5 那条新闻悄悄丢了）
  */
 export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]> {
   const steps: string[] = [];
   const { title, titleEn, date, kind, posterPath, categoryDir = 'paper' } = opts;
   const href = `./library/${categoryDir}/${titleEn}.html`;
   const enHref = `../library/${categoryDir}/${titleEn}.html`;
+  const why = (e: unknown) => (e as Error).message || String(e);
+
+  if (kind === 'poster' && !posterPath) {
+    steps.push('注意：选择了海报新闻但没有海报图片，已按文字新闻处理');
+  }
 
   // 1. 主页新闻区（中文）
   try {
@@ -41,9 +47,11 @@ export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]>
     if (updated !== content) {
       await putFile('index.html', updated, { sha, message: `新闻同步：${title}（移动端 App）` });
       steps.push('index.html 新闻区已更新');
+    } else {
+      steps.push('index.html 新闻区无变化（可能已存在）');
     }
-  } catch {
-    steps.push('index.html 更新失败（可手动添加）');
+  } catch (e) {
+    steps.push(`index.html 更新失败：${why(e)}`);
   }
 
   // 2. news.html 列表
@@ -53,9 +61,11 @@ export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]>
     if (updated !== content) {
       await putFile('news.html', updated, { sha, message: `新闻同步：${title}（移动端 App）` });
       steps.push('news.html 已更新');
+    } else {
+      steps.push('news.html 无变化');
     }
-  } catch {
-    steps.push('news.html 更新失败（可手动添加）');
+  } catch (e) {
+    steps.push(`news.html 更新失败：${why(e)}`);
   }
 
   // 3. 英文主页（卡片标题用英文标题）
@@ -73,13 +83,65 @@ export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]>
     if (updated !== content) {
       await putFile('en/index.html', updated, { sha, message: `News sync: ${titleEn} (mobile app)` });
       steps.push('en/index.html 已更新');
+    } else {
+      steps.push('en/index.html 无变化');
     }
-  } catch {
-    steps.push('en/index.html 更新失败（可手动添加）');
+  } catch (e) {
+    steps.push(`en/index.html 更新失败：${why(e)}`);
   }
 
   return steps;
 }
+
+/** 新闻在板块中的实际存在状态（用于编辑页显示与「补发」判断） */
+export interface NewsPresence {
+  /** 主页中文新闻区内（文字卡或海报） */
+  inIndex: boolean;
+  /** 是否正占据主页左侧海报位 */
+  isPoster: boolean;
+  /** news.html 全量列表内 */
+  inNewsList: boolean;
+  /** 英文主页新闻区内 */
+  inEnIndex: boolean;
+}
+
+/**
+ * 查询某篇文章当前是否已在新闻板块（三处逐一核对）
+ * 单处读取失败按「未知=false」处理并在 errors 中说明
+ */
+export async function checkNewsPresence(
+  opts: { titleEn: string; categoryDir?: string },
+): Promise<{ presence: NewsPresence; errors: string[] }> {
+  const { titleEn, categoryDir = 'paper' } = opts;
+  const href = `./library/${categoryDir}/${titleEn}.html`;
+  const enHref = `../library/${categoryDir}/${titleEn}.html`;
+  const errors: string[] = [];
+  const presence: NewsPresence = { inIndex: false, isPoster: false, inNewsList: false, inEnIndex: false };
+
+  const probe = async (file: string, needle: string): Promise<string | null> => {
+    try {
+      const { content } = await getFile(file);
+      return content.includes(needle) ? content : null;
+    } catch (e) {
+      errors.push(`${file} 读取失败：${(e as Error).message}`);
+      return null;
+    }
+  };
+
+  const indexHtml = await probe('index.html', href);
+  if (indexHtml) {
+    presence.inIndex = true;
+    const poster = indexHtml.match(POSTER_REGION);
+    presence.isPoster = !!poster && poster[0].includes(href);
+  }
+  presence.inNewsList = (await probe('news.html', href)) !== null;
+  presence.inEnIndex = (await probe('en/index.html', enHref)) !== null;
+
+  return { presence, errors };
+}
+
+/** 主页左侧海报块（用于判断新闻当前是海报形态还是文字形态） */
+const POSTER_REGION = /<div class="news-featured-poster">[\s\S]*?<\/div>\s*<\/div>/;
 
 /**
  * 从新闻板块移除指定文章的卡片/列表项（隐藏新闻时调用）
@@ -92,6 +154,7 @@ export async function removeNewsItem(opts: NewsSyncOptions): Promise<string[]> {
   const { titleEn, categoryDir = 'paper' } = opts;
   const href = `./library/${categoryDir}/${titleEn}.html`;
   const enHref = `../library/${categoryDir}/${titleEn}.html`;
+  const why = (e: unknown) => (e as Error).message || String(e);
 
   // 通用：移除包含指定 href 的 <a ...>...</a> 卡片（文字卡 / 列表项）
   // 用 lookahead 断言 href 与 class 同时存在，属性顺序无关（更健壮）
@@ -131,9 +194,11 @@ export async function removeNewsItem(opts: NewsSyncOptions): Promise<string[]> {
     if (updated !== content) {
       await putFile('index.html', updated, { sha, message: `新闻隐藏：${titleEn}（移动端 App）` });
       steps.push('index.html 新闻区已移除');
+    } else {
+      steps.push('index.html 新闻区未找到该卡片');
     }
-  } catch {
-    steps.push('index.html 移除失败（可手动添加）');
+  } catch (e) {
+    steps.push(`index.html 移除失败：${why(e)}`);
   }
 
   // 2. news.html
@@ -143,9 +208,11 @@ export async function removeNewsItem(opts: NewsSyncOptions): Promise<string[]> {
     if (updated !== content) {
       await putFile('news.html', updated, { sha, message: `新闻隐藏：${titleEn}（移动端 App）` });
       steps.push('news.html 已移除');
+    } else {
+      steps.push('news.html 未找到该条目');
     }
-  } catch {
-    steps.push('news.html 移除失败（可手动添加）');
+  } catch (e) {
+    steps.push(`news.html 移除失败：${why(e)}`);
   }
 
   // 3. en/index.html
@@ -156,9 +223,11 @@ export async function removeNewsItem(opts: NewsSyncOptions): Promise<string[]> {
     if (updated !== content) {
       await putFile('en/index.html', updated, { sha, message: `News hide: ${titleEn} (mobile app)` });
       steps.push('en/index.html 已移除');
+    } else {
+      steps.push('en/index.html 未找到该卡片');
     }
-  } catch {
-    steps.push('en/index.html 移除失败（可手动添加）');
+  } catch (e) {
+    steps.push(`en/index.html 移除失败：${why(e)}`);
   }
 
   return steps;

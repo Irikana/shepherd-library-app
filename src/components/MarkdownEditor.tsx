@@ -1,6 +1,8 @@
 // Markdown 正文编辑器（多行输入 + 快捷插入工具栏 + 数学符号面板）
 // 插入交互修复：工具栏按钮用 onPressIn 立即响应（Android 输入法打开时无需先收起键盘），
 // 插入后通过 setNativeProps 恢复光标位置并保持输入框焦点
+// 锁定态（editable=false）：改挂 ReadOnlyText，可滑动浏览但不能编辑
+// （Android 上 editable=false 的输入框连内部滚动一起失效，用户既滑不动也看不了全文）
 import React, { useState } from 'react';
 import {
   Modal,
@@ -13,6 +15,7 @@ import {
 } from 'react-native';
 import { FONT, SPACING, useTheme, type Palette } from '../theme';
 import { useComposeStore } from '../store/compose-store';
+import { ReadOnlyText } from './ReadOnlyText';
 
 // 滚动修复说明：
 // TextInput multiline + flex:1 自行管理滚动（Android 嵌套 ScrollView 会导致滚动失效）
@@ -52,7 +55,8 @@ const CALLOUT =
   '  <p>§提示内容</p>\n' +
   '</div>';
 
-const ACTIONS: InsertAction[] = [
+/** 站点出版预设：含网站视觉组件（蓝框/灰引/红警/Callout/折叠块） */
+const LIBRARY_ACTIONS: InsertAction[] = [
   { label: 'H2', insert: (b, s) => ({ text: b.slice(0, s) + '## ' + b.slice(s), cursor: s + 3 }) },
   { label: 'H3', insert: (b, s) => ({ text: b.slice(0, s) + '### ' + b.slice(s), cursor: s + 4 }) },
   {
@@ -217,7 +221,7 @@ export function MarkdownEditor({
   onChangeText?: (text: string) => void;
   /** 脚注列表（可选；用于「脚注」按钮自动编号，默认取 compose-store form.footnotes） */
   footnotes?: string[];
-  /** 是否可编辑（默认 true；锁定态由外部传入 false） */
+  /** 是否可编辑（默认 true；锁定态由外部传入 false —— 锁定时可滑动浏览、不可编辑） */
   editable?: boolean;
 }) {
   const compose = useComposeStore();
@@ -238,7 +242,7 @@ export function MarkdownEditor({
   // 撰写模式（compose-store 表单）以 compose 的 locked.body 为准
   const controlled = value !== undefined && onChangeText !== undefined;
   const lockedBody = controlled ? !editable : locked.body;
-
+  const actions = LIBRARY_ACTIONS;
   /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
   const applyInsert = (text: string, cursor: number) => {
     changeText(text);
@@ -283,63 +287,58 @@ export function MarkdownEditor({
 
   return (
     <View style={s.container}>
-      <View style={s.toolbar}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          // 键盘弹出时点击按钮一次即响应（不消费首次触摸），滑动不会误触（onPress 需抬起且未移动）
-          keyboardShouldPersistTaps="handled"
-          scrollEnabled={!lockedBody}
-        >
-          {ACTIONS.map((a) => (
-            <Pressable
-              key={a.label}
-              style={[s.toolBtn, lockedBody && s.toolBtnDisabled]}
-              onPress={() => handleInsert(a)}
-              disabled={lockedBody}
+      {lockedBody ? (
+        /* 锁定态：整块换成只读浏览视图（可滑动、不可编辑、工具栏不可用） */
+        <ReadOnlyText
+          text={text}
+          mono
+          hint="已锁定：可上下滑动浏览，不能编辑；如需修改请先解锁"
+        />
+      ) : (
+        <>
+          <View style={s.toolbar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              // 键盘弹出时点击按钮一次即响应（不消费首次触摸），滑动不会误触（onPress 需抬起且未移动）
+              keyboardShouldPersistTaps="handled"
             >
-              <Text style={s.toolText}>{a.label}</Text>
-            </Pressable>
-          ))}
-          <Pressable
-            style={[s.toolBtn, s.toolBtnFootnote, lockedBody && s.toolBtnDisabled]}
-            onPress={insertFootnote}
-            disabled={lockedBody}
-          >
-            <Text style={s.toolText}>脚注</Text>
-          </Pressable>
-          <Pressable
-            style={[s.toolBtn, s.toolBtnSymbols, lockedBody && s.toolBtnDisabled]}
-            onPress={() => setSymbolsVisible(true)}
-            disabled={lockedBody}
-          >
-            <Text style={s.toolText}>数学符号</Text>
-          </Pressable>
-        </ScrollView>
-      </View>
-      {/* 正文区域：TextInput multiline 自行管理滚动（不嵌套 ScrollView） */}
-      <TextInput
-        ref={inputRef}
-        style={s.editor}
-        value={text}
-        onChangeText={changeText}
-        onSelectionChange={(e) => {
-          selectionRef.current = {
-            start: e.nativeEvent.selection.start,
-            end: e.nativeEvent.selection.end,
-          };
-        }}
-        placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
-        placeholderTextColor={colors.textLight}
-        multiline
-        textAlignVertical="top"
-        autoCapitalize="none"
-        autoCorrect={false}
-        editable={!lockedBody}
-        showSoftInputOnFocus={!lockedBody}
-      />
-      <Text style={s.counter}>{text.length} 字</Text>
-
+              {actions.map((a) => (
+                <Pressable key={a.label} style={s.toolBtn} onPress={() => handleInsert(a)}>
+                  <Text style={s.toolText}>{a.label}</Text>
+                </Pressable>
+              ))}
+              <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPress={insertFootnote}>
+                <Text style={s.toolText}>脚注</Text>
+              </Pressable>
+              <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPress={() => setSymbolsVisible(true)}>
+                <Text style={s.toolText}>数学符号</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+          {/* 正文区域：TextInput multiline 自行管理滚动（不嵌套 ScrollView） */}
+          <TextInput
+            ref={inputRef}
+            style={s.editor}
+            value={text}
+            onChangeText={changeText}
+            onSelectionChange={(e) => {
+              selectionRef.current = {
+                start: e.nativeEvent.selection.start,
+                end: e.nativeEvent.selection.end,
+              };
+            }}
+            placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
+            placeholderTextColor={colors.textLight}
+            multiline
+            textAlignVertical="top"
+            autoCapitalize="none"
+            autoCorrect={false}
+            showSoftInputOnFocus
+          />
+          <Text style={s.counter}>{text.length} 字</Text>
+        </>
+      )}
       {/* 数学符号面板 */}
       <Modal
         visible={symbolsVisible}

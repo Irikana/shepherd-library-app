@@ -7,8 +7,11 @@
 // 非 library 文章的站点页面（入口页、说明页、知识馆页、主页板块等）自动识别为「内容页面」：
 // 提供「正文 / 源码」两标签页，并可直接修改页面主标题（page-title-main），同样用撰写式体验改内容
 // 滚动：正文/源码统一使用 CodeEditor/MarkdownEditor（外层 ScrollView 唯一滚动 + 内部输入框不限制高度），
-// 避免 Android 上 TextInput 内部滚动与父级手势冲突导致的"滑到底部"问题
-import React, { useEffect, useRef, useState } from 'react';
+// 避免 Android 上 TextInput 内部滚动与父级手势冲突导致的"滑到底部"问题；
+// 标签页锁定态改挂 ReadOnlyText —— 可自由滑动浏览，但不能编辑
+// 「预览」标签页：把当前编辑结果（含未保存改动）按网站真实样式渲染，先看效果再保存
+// 「新闻」按钮：在编辑处直接查新闻板块收录状态 / 展示或撤下新闻（含海报形态），失败显示原因
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Keyboard,
@@ -32,6 +35,9 @@ import { removeNewsItem, syncNewsSections } from '../src/lib/news-sync';
 import { EditMetaForm } from '../src/components/EditMetaForm';
 import { MarkdownEditor } from '../src/components/MarkdownEditor';
 import { CodeEditor } from '../src/components/CodeEditor';
+import { NewsPublishPanel } from '../src/components/NewsPublishPanel';
+import { HtmlPreview } from '../src/components/HtmlPreview';
+import { buildPreviewHtml, getSiteCss, PREVIEW_BASE_URL } from '../src/lib/site-style';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 
 /** 新建文件时允许的根目录（安全白名单，防止写入仓库任意位置） */
@@ -157,9 +163,9 @@ async function syncVisibility(
   return { ok, fail };
 }
 
-type Tab = 'meta' | 'body' | 'source';
+type Tab = 'meta' | 'body' | 'source' | 'preview';
 
-/** 文章文件的编辑标签页（元数据表单 / 正文区段 / 整页源码） */
+/** 文章文件的编辑标签页（元数据表单 / 正文区段 / 整页源码 / 网站样式预览） */
 const ARTICLE_TABS: { key: Tab; label: string }[] = [
   { key: 'meta', label: '元数据' },
   { key: 'body', label: '正文' },
@@ -174,6 +180,31 @@ const PAGE_TABS: { key: Tab; label: string }[] = [
 
 /** 普通文本文件的标签页 */
 const PLAIN_TABS: { key: Tab; label: string }[] = [{ key: 'source', label: '源码' }];
+
+/** 预览标签页（所有 HTML 文件都可预览渲染效果） */
+const PREVIEW_TAB: { key: Tab; label: string } = { key: 'preview', label: '预览' };
+
+/** 是否为可预览的 HTML 文件 */
+function isHtmlFile(path: string, content: string): boolean {
+  if (/\.html?$/i.test(path)) return true;
+  return /^\s*<(!doctype|html)\b/i.test(content.slice(0, 400));
+}
+
+/**
+ * 从路径解析新闻板块需要的定位信息：仅 library/<分类>/<文件名>.html 可作为新闻条目
+ * （新闻卡片链接规矩：./library/{categoryDir}/{titleEn}.html）
+ */
+function newsTargetOf(path: string): { categoryDir: string; titleEn: string } | null {
+  const m = path.match(/^library\/([^/]+)\/([^/]+)\.html?$/);
+  if (!m) return null;
+  return { categoryDir: m[1], titleEn: m[2] };
+}
+
+/** 当天日期 YYYY-MM-DD（内容页面没有创建日期时兜底用） */
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export default function EditorScreen() {
   const router = useRouter();
@@ -209,9 +240,51 @@ export default function EditorScreen() {
   const [newDir, setNewDir] = useState(NEW_FILE_ROOTS[0].value);
   const [newFileName, setNewFileName] = useState('');
   const [tab, setTab] = useState<Tab>('meta');
+  /** 网站样式表（预览用，首次进入预览页时抓取并缓存于 site-style 模块） */
+  const [siteCss, setSiteCss] = useState<string | null>(null);
+  const [cssLoading, setCssLoading] = useState(false);
+  const [cssFailed, setCssFailed] = useState(false);
+  /** 新闻板块面板 */
+  const [newsVisible, setNewsVisible] = useState(false);
 
-  /** 当前文件可用的标签页：文章三页 / 内容页面两页 / 普通文件仅源码 */
-  const tabs = isNew ? PLAIN_TABS : isArticle ? ARTICLE_TABS : canEditBody ? PAGE_TABS : PLAIN_TABS;
+  const newsTarget = isNew ? null : newsTargetOf(path);
+  const previewable = !isNew && isHtmlFile(path, content);
+
+  /** 当前文件可用的标签页：文章三页 / 内容页面两页 / 普通文件仅源码；HTML 文件额外给预览页 */
+  const tabs = useMemo(() => {
+    const base = isNew ? PLAIN_TABS : isArticle ? ARTICLE_TABS : canEditBody ? PAGE_TABS : PLAIN_TABS;
+    return previewable ? [...base, PREVIEW_TAB] : base;
+  }, [isNew, isArticle, canEditBody, previewable]);
+
+  /**
+   * 预览用 HTML：把未保存的改动全部合并进来再渲染
+   * - 正文/源码/页面标题：编辑器已实时写回 content
+   * - 元数据：与保存流程同一函数（updateArticleHtml），未落盘也看得见效果
+   */
+  const previewHtml = useMemo(() => {
+    const merged =
+      isArticle && metadataDirty && metadata
+        ? updateArticleHtml(content, metadata, useConfigStore.getState().tagColors)
+        : content;
+    return buildPreviewHtml(merged, siteCss);
+  }, [content, isArticle, metadataDirty, metadata, siteCss]);
+
+  // 进入预览页：确保网站样式已抓取（失败不缓存，下次进入自动重试）
+  useEffect(() => {
+    if (tab !== 'preview' || siteCss || cssLoading) return;
+    setCssLoading(true);
+    setCssFailed(false);
+    getSiteCss()
+      .then((css) => {
+        setCssLoading(false);
+        if (!css) setCssFailed(true);
+        setSiteCss(css);
+      })
+      .catch(() => {
+        setCssLoading(false);
+        setCssFailed(true);
+      });
+  }, [tab, siteCss, cssLoading]);
 
   // 内容页面与普通文件没有「元数据」页：加载完成后落在正文（或源码）页
   useEffect(() => {
@@ -348,9 +421,13 @@ export default function EditorScreen() {
     router.back();
   };
 
-  /** 切换当前标签页的锁定状态（防误触） */
+  /** 预览页没有可锁定的输入区，锁定动作只作用于元数据/正文/源码三页 */
+  const lockTab: 'meta' | 'body' | 'source' | null = tab === 'preview' ? null : tab;
+  const tabLocked = lockTab ? locked[lockTab] : false;
+
+  /** 切换当前标签页的锁定状态（防误触：锁定后可滑动浏览，不能编辑） */
   const handleToggleLock = () => {
-    toggleLock(tab);
+    if (lockTab) toggleLock(lockTab);
   };
 
   /** 切换标签页：收起键盘；回到「正文」时惰性刷新还原（源码可能已改） */
@@ -378,7 +455,7 @@ export default function EditorScreen() {
         </Text>
       </View>
 
-      {/* 元数据/正文/源码切换标签 + 锁定开关（内容页面省略元数据页） */}
+      {/* 元数据/正文/源码/预览切换标签 + 锁定开关 + 新闻板块入口（内容页面省略元数据页） */}
       {!isNew && (
         <View style={s.tabs}>
           {tabs.map((t) => (
@@ -390,21 +467,35 @@ export default function EditorScreen() {
               <Text style={[s.tabText, tab === t.key && s.tabTextActive]}>{t.label}</Text>
             </Pressable>
           ))}
-          <Pressable
-            style={[s.lockBtn, locked[tab] && s.lockBtnOn]}
-            onPress={handleToggleLock}
-            accessibilityLabel={locked[tab] ? '解锁当前页' : '锁定当前页'}
-          >
-            <Text style={[s.lockText, locked[tab] && s.lockTextOn]}>
-              {locked[tab] ? '已锁定' : '锁定'}
-            </Text>
-          </Pressable>
+          {tab !== 'preview' && (
+            <Pressable
+              style={[s.lockBtn, tabLocked && s.lockBtnOn]}
+              onPress={handleToggleLock}
+              accessibilityLabel={tabLocked ? '解锁当前页' : '锁定当前页'}
+            >
+              <Text style={[s.lockText, tabLocked && s.lockTextOn]}>
+                {tabLocked ? '已锁定' : '锁定'}
+              </Text>
+            </Pressable>
+          )}
+          {newsTarget && (
+            <Pressable
+              style={[s.lockBtn, s.newsBtn, newsVisible && s.newsBtnOn]}
+              onPress={() => setNewsVisible(true)}
+              accessibilityLabel="新闻板块"
+            >
+              <Text style={[s.lockText, s.newsText]}>新闻</Text>
+            </Pressable>
+          )}
         </View>
       )}
       {!isNew && (
         <Text style={s.lockHint}>
           {isPage ? '内容页面：正文容器与页面标题可编辑；' : ''}
-          锁定后当前页只读，切换查看不会误触；{locked.meta || locked.body || locked.source ? '已锁定' : '未锁定'}
+          {tabLocked && tab !== 'preview'
+            ? '已锁定：可滑动浏览，不能编辑；'
+            : '锁定后当前页可滑动浏览但不能编辑；'}
+          {newsTarget ? '「新闻」可在编辑处补发或撤下该篇的新闻板块展示。' : ''}
         </Text>
       )}
 
@@ -476,6 +567,19 @@ export default function EditorScreen() {
             />
           )}
         </View>
+      ) : tab === 'preview' && previewable ? (
+        <View style={s.editorArea}>
+          <View style={s.bodyHint}>
+            <Text style={s.bodyHintText}>
+              {cssLoading
+                ? '正在读取网站样式表（css/style.css + 精修层）…'
+                : cssFailed
+                  ? '网站样式读取失败，当前为无样式渲染（网络恢复后再进一次预览页即可）；下面是该文件保存后的真实页面效果，含未保存的改动'
+                  : '按网站真实样式渲染，含未保存的改动；正文/源码/元数据/页面标题的效果都能在这里先看到'}
+            </Text>
+          </View>
+          <HtmlPreview html={previewHtml} baseUrl={PREVIEW_BASE_URL} />
+        </View>
       ) : (
         <CodeEditor
           value={content}
@@ -499,6 +603,18 @@ export default function EditorScreen() {
           <Text style={s.saveBtnText}>{saving ? '保存中…' : isNew ? '创建文件' : '保存'}</Text>
         </Pressable>
       </View>
+
+      {/* 新闻板块面板：查收录状态 / 展示或撤下（文字或海报形态） */}
+      {newsTarget && (
+        <NewsPublishPanel
+          visible={newsVisible}
+          onClose={() => setNewsVisible(false)}
+          title={metadata?.title || pageTitle || name || newsTarget.titleEn}
+          titleEn={newsTarget.titleEn}
+          date={metadata?.createDate || todayISO()}
+          categoryDir={newsTarget.categoryDir}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -540,6 +656,9 @@ const createStyles = (COLORS: Palette) =>
       backgroundColor: COLORS.bgSubtle,
     },
     lockBtnOn: { backgroundColor: COLORS.accent },
+    newsBtn: { borderLeftWidth: 1, borderLeftColor: COLORS.border },
+    newsBtnOn: { backgroundColor: COLORS.tagNewsBg, borderLeftColor: COLORS.tagNewsBorder },
+    newsText: { color: COLORS.tagNewsText },
     lockText: { fontSize: 13, color: COLORS.textSecondary },
     lockTextOn: { color: '#fff', fontWeight: '600' },
     lockHint: {
