@@ -1,4 +1,4 @@
-﻿// 根布局 + Auth Gate
+// 根布局 + Auth Gate
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, useSegments, useRouter } from 'expo-router';
@@ -48,6 +48,7 @@ export default function RootLayout() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
+          animation: 'slide_from_right',
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.accent,
           headerTitleStyle: { fontWeight: '600' },

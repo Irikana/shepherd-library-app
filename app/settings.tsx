@@ -7,6 +7,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSettingsStore } from '../src/store/settings-store';
 import { useConfigStore } from '../src/store/config-store';
 import { TagColorPicker } from '../src/components/TagColorPicker';
+import { PressFX } from '../src/components/PressFX';
 import { DEFAULT_CONTACT_CHANNELS, type ContactChannel } from '../src/lib/site-config';
 import { tagChipStyle } from '../src/lib/tag-colors';
 import { SPACING, useTheme, type Palette, type ThemeMode } from '../src/theme';
@@ -215,9 +216,9 @@ export default function SettingsScreen() {
       </View>
       <View style={s.formRow}>
         <TextInput style={[s.input, s.inputFlex]} value={catDir} onChangeText={setCatDir} placeholder="仓库目录（英文，如 my-category）" placeholderTextColor={colors.textLight} autoCapitalize="none" autoCorrect={false} />
-        <Pressable style={s.addBtn} onPress={handleAddCategory} disabled={saving}>
+        <PressFX style={s.addBtn} onPress={handleAddCategory} disabled={saving}>
           <Text style={s.addBtnText}>创建分类</Text>
-        </Pressable>
+        </PressFX>
       </View>
 
       {/* 标签（含标签颜色设置） */}

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAuthStore } from '../src/store/auth-store';
+import { PressFX } from '../src/components/PressFX';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 import { REPO_CONFIG } from '../src/lib/config';
 import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
@@ -77,9 +78,9 @@ export default function LoginScreen() {
         </View>
       )}
 
-      <Pressable style={[s.loginBtn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading}>
+      <PressFX style={[s.loginBtn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading}>
         <Text style={s.loginBtnText}>{loading ? '验证中…' : '登录'}</Text>
-      </Pressable>
+      </PressFX>
 
       <Pressable style={s.linkBtn} onPress={openTokenSettings}>
         <Text style={s.linkText}>前往 GitHub 创建 Token</Text>

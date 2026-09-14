@@ -36,6 +36,7 @@ import { EditMetaForm } from '../src/components/EditMetaForm';
 import { MarkdownEditor } from '../src/components/MarkdownEditor';
 import { CodeEditor } from '../src/components/CodeEditor';
 import { NewsPublishPanel } from '../src/components/NewsPublishPanel';
+import { PressFX } from '../src/components/PressFX';
 import { HtmlPreview } from '../src/components/HtmlPreview';
 import { buildPreviewHtml, getSiteCss, PREVIEW_BASE_URL } from '../src/lib/site-style';
 import { SPACING, useTheme, type Palette } from '../src/theme';
@@ -595,13 +596,13 @@ export default function EditorScreen() {
         <Pressable style={s.backBtn} onPress={handleBack}>
           <Text style={s.backText}>返回</Text>
         </Pressable>
-        <Pressable
+        <PressFX
           style={[s.saveBtn, (saving || !hasChanges) && s.btnDisabled]}
           onPress={handleSave}
           disabled={saving || !hasChanges}
         >
           <Text style={s.saveBtnText}>{saving ? '保存中…' : isNew ? '创建文件' : '保存'}</Text>
-        </Pressable>
+        </PressFX>
       </View>
 
       {/* 新闻板块面板：查收录状态 / 展示或撤下（文字或海报形态） */}

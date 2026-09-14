@@ -1,16 +1,29 @@
 // 首页：功能入口卡片 + 版本号 + 速率限制
-import React from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { Alert, Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Platform } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../src/store/auth-store';
 import { useDraftsStore } from '../src/store/drafts-store';
 import { rateLimit } from '../src/lib/rate-limit';
 import { SPACING, useTheme, type Palette } from '../src/theme';
+import { PressFX } from '../src/components/PressFX';
 import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
+
+/** 入场动画：仅前 8 个条目参与，fade in + 12px 上移，每项错峰 40ms，单段时长 240ms */
+const ENTER_MAX = 8;
+const ENTER_STAGGER_MS = 40;
+const ENTER_DURATION_MS = 240;
+const ENTER_TRANSLATE_Y = 12;
+/** 第 9 项及以后复用：进度恒为 1（无动画），保持渲染路径一致 */
+const ENTER_DONE = new Animated.Value(1);
+
+/** 首页带按压反馈（PressFX）的功能卡片：两个主要撰写入口 */
+const PRIMARY_HREFS = new Set(['/compose/article', '/compose/knowledge']);
 
 interface FeatureItem {
   title: string;
@@ -45,6 +58,40 @@ export default function HomeScreen() {
   const s = createStyles(colors);
 
   const draftCount = useDraftsStore((st) => st.drafts.length);
+
+  // 入场动画：功能入口列表为本地静态数据，首帧渲染完成即视为加载完成，开始错峰入场
+  const enterValues = useMemo(
+    () => Array.from({ length: ENTER_MAX }, () => new Animated.Value(0)),
+    [],
+  );
+  useEffect(() => {
+    const anims = enterValues.map((v, i) =>
+      Animated.timing(v, {
+        toValue: 1,
+        duration: ENTER_DURATION_MS,
+        delay: i * ENTER_STAGGER_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    );
+    Animated.parallel(anims).start();
+  }, [enterValues]);
+
+  /** 第 i 项的入场样式：opacity 0->1，translateY 12->0 */
+  const enterStyle = (i: number): Animated.WithAnimatedValue<ViewStyle> => {
+    const v = i < ENTER_MAX ? enterValues[i] : ENTER_DONE;
+    return {
+      opacity: v,
+      transform: [
+        {
+          translateY: v.interpolate({
+            inputRange: [0, 1],
+            outputRange: [ENTER_TRANSLATE_Y, 0],
+          }),
+        },
+      ],
+    };
+  };
 
   const FEATURES: FeatureItem[] = [
     {
@@ -148,27 +195,42 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* 功能入口 */}
+      {/* 功能入口：前 8 项错峰入场；主要撰写入口使用 PressFX 按压反馈，其余保持 Pressable */}
       <Text style={s.sectionTitle}>功能</Text>
-      {FEATURES.map((f) => (
-        <Pressable
-          key={f.title}
-          style={[s.card, !f.enabled && s.cardDisabled]}
-          onPress={() => f.enabled && f.href && router.push(f.href)}
-        >
-          <View style={s.cardHeader}>
-            <Text style={[s.cardTitle, !f.enabled && s.textDisabled]}>{f.title}</Text>
-            {f.badge && <Text style={s.badge}>{f.badge}</Text>}
-          </View>
-          <Text style={s.cardDesc}>{f.desc}</Text>
-        </Pressable>
-      ))}
+      {FEATURES.map((f, i) => {
+        const cardStyle = [s.card, !f.enabled && s.cardDisabled];
+        const handlePress = () => {
+          if (f.enabled && f.href) router.push(f.href);
+        };
+        const cardBody = (
+          <>
+            <View style={s.cardHeader}>
+              <Text style={[s.cardTitle, !f.enabled && s.textDisabled]}>{f.title}</Text>
+              {f.badge && <Text style={s.badge}>{f.badge}</Text>}
+            </View>
+            <Text style={s.cardDesc}>{f.desc}</Text>
+          </>
+        );
+        return (
+          <Animated.View key={f.title} style={enterStyle(i)}>
+            {f.href && PRIMARY_HREFS.has(f.href) ? (
+              <PressFX style={cardStyle} onPress={handlePress}>
+                {cardBody}
+              </PressFX>
+            ) : (
+              <Pressable style={cardStyle} onPress={handlePress}>
+                {cardBody}
+              </Pressable>
+            )}
+          </Animated.View>
+        );
+      })}
 
       {/* 操作 */}
       <View style={s.actions}>
-        <Pressable style={s.logoutBtn} onPress={handleLogout}>
+        <PressFX style={s.logoutBtn} onPress={handleLogout}>
           <Text style={s.logoutText}>退出登录</Text>
-        </Pressable>
+        </PressFX>
       </View>
     </ScrollView>
   );
