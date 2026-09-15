@@ -118,6 +118,8 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
   const titleEn = fileName.replace(/\.html?$/, '');
 
   return {
+    // 编辑器解析的是 library/ 下的文章页；知识词条页不走本解析器
+    entryType: 'article',
     title,
     titleEn,
     author,
@@ -130,6 +132,8 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
     footnotes,
     includeMathJax,
     category,
+    aliases: '',
+    knowledgeCategory: 'phenomenon',
     isNews,
     hidden,
   };

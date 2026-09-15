@@ -1,4 +1,6 @@
 // Markdown 正文编辑器（多行输入 + 快捷插入工具栏 + 数学符号面板）
+// 纯受控：value / onChangeText 必填，编辑器不再回退读写任何 store——
+// 撰写页与知识词条页各自绑定自己表单的 bodyMarkdown，避免正文串写（缺陷 A 的第一处根因）
 // 插入交互修复：工具栏按钮用 onPressIn 立即响应（Android 输入法打开时无需先收起键盘），
 // 插入后通过 setNativeProps 恢复光标位置并保持输入框焦点
 // 锁定态（editable=false）：改挂 ReadOnlyText，可滑动浏览但不能编辑
@@ -14,8 +16,9 @@ import {
   View,
 } from 'react-native';
 import { FONT, SPACING, useTheme, type Palette } from '../theme';
-import { useComposeStore } from '../store/compose-store';
+import { buildSectionScaffold } from '../templates/knowledge-entry';
 import { ReadOnlyText } from './ReadOnlyText';
+import type { EntryType } from '../types';
 
 // 滚动修复说明：
 // TextInput multiline + flex:1 自行管理滚动（Android 嵌套 ScrollView 会导致滚动失效）
@@ -138,6 +141,36 @@ const LIBRARY_ACTIONS: InsertAction[] = [
   } },
 ];
 
+/** 词条「插入分节」：一键补齐缺失的 概述 / 详细说明 / 历史 脚手架（已填写的节不重复插入） */
+const SECTION_ACTION: InsertAction = {
+  label: '插入分节',
+  insert: (b, s, e) => {
+    const scaffold = buildSectionScaffold(b);
+    if (!scaffold) {
+      // 三节都已有内容：退化为插入普通 H2，交给模板按未归类节处理
+      return { text: b.slice(0, s) + '## ' + b.slice(s), cursor: s + 3 };
+    }
+    const head = b.slice(0, e).trimEnd();
+    const tail = b.slice(e);
+    const joined = head ? `${head}\n\n${scaffold}` : scaffold;
+    const caret = joined.indexOf('§');
+    const clean = caret >= 0 ? joined.replace('§', '') : joined;
+    return { text: clean + tail, cursor: caret >= 0 ? caret : clean.length };
+  },
+};
+
+/** 词条预设用到的动作标签（文章预设的子集：去掉裸 H2，改由「插入分节」提供规范节标题） */
+const KNOWLEDGE_LABELS = new Set([
+  'H3', '加粗', '斜体', '删除线', '行内代码', '链接', '图片', '引用', '列表', '有序',
+  '蓝框', '灰引', '代码块', '表格', '分割线', '换行', '行内公式', '独立公式',
+]);
+
+/** 知识词条预设：分节脚手架 + 常用排版（提示框保留，正文组件与站点视觉一致） */
+const KNOWLEDGE_ACTIONS: InsertAction[] = [
+  SECTION_ACTION,
+  ...LIBRARY_ACTIONS.filter((a) => KNOWLEDGE_LABELS.has(a.label)),
+];
+
 /** 数学符号面板分组（LaTeX 片段，§ 为光标落点） */
 const SYMBOL_GROUPS: { title: string; items: { label: string; insert: string }[] }[] = [
   {
@@ -208,41 +241,37 @@ export function MarkdownEditor({
   onScroll,
   value,
   onChangeText,
-  footnotes,
+  footnotes = [],
+  entryType = 'article',
   editable = true,
 }: {
   /** 恢复滚动位置（切换标签页时传入上次位置，仅首次挂载时应用） */
   scrollPosition?: number;
   /** 滚动位置变化回调（用于保存浏览进度） */
   onScroll?: (y: number) => void;
-  /** 受控值（可选；不传则使用 compose-store 的 form.bodyMarkdown） */
-  value?: string;
-  /** 受控变更回调（与 value 成对使用） */
-  onChangeText?: (text: string) => void;
-  /** 脚注列表（可选；用于「脚注」按钮自动编号，默认取 compose-store form.footnotes） */
+  /** 受控正文值（必填：编辑器不读写任何 store） */
+  value: string;
+  /** 受控变更回调（必填） */
+  onChangeText: (text: string) => void;
+  /** 脚注列表（用于「脚注」按钮自动编号；知识词条不显示脚注按钮） */
   footnotes?: string[];
+  /** 条目类型：决定工具栏预设（默认文章预设；'knowledge' 用分节脚手架预设） */
+  entryType?: EntryType;
   /** 是否可编辑（默认 true；锁定态由外部传入 false —— 锁定时可滑动浏览、不可编辑） */
   editable?: boolean;
 }) {
-  const compose = useComposeStore();
-  const { form, setField, locked } = compose;
+  const isKnowledge = entryType === 'knowledge';
   const { colors } = useTheme();
   const s = createStyles(colors);
   const inputRef = React.useRef<TextInput>(null);
   const selectionRef = React.useRef({ start: 0, end: 0 });
   const [symbolsVisible, setSymbolsVisible] = useState(false);
 
-  // 受控模式（内容编辑）与撰写模式（compose-store）二选一
-  const text = value ?? form.bodyMarkdown;
-  const currentFootnotes = footnotes ?? form.footnotes;
-  const changeText = (t: string) => (onChangeText ? onChangeText(t) : setField('bodyMarkdown', t));
-
-  // 锁定状态下只读（防误触）
-  // 受控模式（编辑已有文章，外部传入 value/onChangeText）以外部 editable 为准；
-  // 撰写模式（compose-store 表单）以 compose 的 locked.body 为准
-  const controlled = value !== undefined && onChangeText !== undefined;
-  const lockedBody = controlled ? !editable : locked.body;
-  const actions = LIBRARY_ACTIONS;
+  const text = value;
+  const changeText = (t: string) => onChangeText(t);
+  // 锁定状态由外部 editable 决定（撰写页传入 locked.body 的反值）
+  const lockedBody = !editable;
+  const actions = isKnowledge ? KNOWLEDGE_ACTIONS : LIBRARY_ACTIONS;
   /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
   const applyInsert = (text: string, cursor: number) => {
     changeText(text);
@@ -280,7 +309,7 @@ export function MarkdownEditor({
     while ((m = re.exec(body)) !== null) {
       maxN = Math.max(maxN, parseInt(m[1], 10));
     }
-    const n = Math.max(maxN, currentFootnotes.length) + 1;
+    const n = Math.max(maxN, footnotes.length) + 1;
     const next = body.slice(0, start) + `[^${n}]` + body.slice(end);
     applyInsert(next, start + 3 + String(n).length);
   };
@@ -304,13 +333,19 @@ export function MarkdownEditor({
               keyboardShouldPersistTaps="handled"
             >
               {actions.map((a) => (
-                <Pressable key={a.label} style={s.toolBtn} onPress={() => handleInsert(a)}>
+                <Pressable
+                  key={a.label}
+                  style={[s.toolBtn, a.label === '插入分节' && s.toolBtnSection]}
+                  onPress={() => handleInsert(a)}
+                >
                   <Text style={s.toolText}>{a.label}</Text>
                 </Pressable>
               ))}
-              <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPress={insertFootnote}>
-                <Text style={s.toolText}>脚注</Text>
-              </Pressable>
+              {!isKnowledge && (
+                <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPress={insertFootnote}>
+                  <Text style={s.toolText}>脚注</Text>
+                </Pressable>
+              )}
               <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPress={() => setSymbolsVisible(true)}>
                 <Text style={s.toolText}>数学符号</Text>
               </Pressable>
@@ -328,7 +363,11 @@ export function MarkdownEditor({
                 end: e.nativeEvent.selection.end,
               };
             }}
-            placeholder="在此撰写正文（Markdown）…&#10;空行分段，可用上方工具栏插入组件"
+            placeholder={
+              isKnowledge
+                ? '在此撰写词条正文（Markdown）…\n点上方「插入分节」建立 概述 / 详细说明 / 历史 三节，再逐节填写'
+                : '在此撰写正文（Markdown）…\n空行分段，可用上方工具栏插入组件'
+            }
             placeholderTextColor={colors.textLight}
             multiline
             textAlignVertical="top"
@@ -399,6 +438,7 @@ const createStyles = (COLORS: Palette) =>
       backgroundColor: COLORS.bg,
     },
     toolBtnFootnote: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
+    toolBtnSection: { borderColor: COLORS.accent, backgroundColor: COLORS.bgMuted },
     toolBtnSymbols: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
     toolBtnDisabled: { opacity: 0.35 },
     toolText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },

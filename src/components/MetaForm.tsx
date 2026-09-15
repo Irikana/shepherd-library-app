@@ -1,4 +1,6 @@
-// 文章元数据表单
+// 撰写元数据表单（统一条目类型）
+// entryType==='article'：双标题 + 作者 + 日期 + 性质 + 分类 + 新闻开关 + 标签 + 补充说明 + 脚注 + 隐藏
+// entryType==='knowledge'：双标题 + 近义词/别称 + 知识分类 + 日期（词条是文章的一种，共用同一份表单与同一套锁定/滚动逻辑）
 import React, { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SPACING, useTheme, type Palette } from '../theme';
@@ -7,10 +9,14 @@ import { useConfigStore } from '../store/config-store';
 import { TagChips } from './TagChips';
 import { DatePickerModal } from './DatePickerModal';
 import { TimePickerModal } from './TimePickerModal';
-import type { ArticleType } from '../types';
+import { KNOWLEDGE_CATEGORIES } from '../templates/knowledge-entry';
+import type { ArticleType, KnowledgeCategory } from '../types';
 
 /** 文章性质（区别于文章分类：library/ 下每个子目录是一个分类） */
 const ARTICLE_TYPES: ArticleType[] = ['录音文章', '手写文章', '信息文章', '实验性文章'];
+
+/** 知识馆分类（顺序与词条页侧边栏一致） */
+const KNOWLEDGE_CATEGORY_KEYS = Object.keys(KNOWLEDGE_CATEGORIES) as KnowledgeCategory[];
 
 interface MetaFormProps {
   /** 可选：新闻发布页的附加区块 */
@@ -28,6 +34,8 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
   const allTags = useConfigStore((s) => s.tags);
   const { colors } = useTheme();
   const s = createStyles(colors);
+  /** 词条会话：只渲染词条信息块，文章专属字段（性质/分类/新闻/标签/脚注/隐藏…）整体不出现 */
+  const isKnowledge = form.entryType === 'knowledge';
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -73,12 +81,12 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
       keyboardShouldPersistTaps="handled"
     >
       {/* 标题（中文） */}
-      <Text style={s.label}>标题 *</Text>
+      <Text style={s.label}>{isKnowledge ? '词条标题 *' : '标题 *'}</Text>
       <TextInput
         style={s.input}
         value={form.title}
         onChangeText={(v) => setField('title', v)}
-        placeholder="文章中文标题（用于页面显示）"
+        placeholder={isKnowledge ? '词条中文标题（用于页面显示）' : '文章中文标题（用于页面显示）'}
         placeholderTextColor={colors.textLight}
         editable={!lockedMeta}
       />
@@ -89,24 +97,66 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
         style={s.input}
         value={form.titleEn}
         onChangeText={(v) => setField('titleEn', v)}
-        placeholder="英文标题，将作为文件名（如 a-new-article）"
+        placeholder={isKnowledge ? '英文标题，将作为文件名（如 inverse-method）' : '英文标题，将作为文件名（如 a-new-article）'}
         placeholderTextColor={colors.textLight}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!lockedMeta}
       />
-      <Text style={s.hint}>英文标题将作为文件名，兼容性更好；中文标题用于页面显示</Text>
+      <Text style={s.hint}>
+        {isKnowledge
+          ? '英文标题将作为词条页文件名（knowledge-hall/categories/{分类}/{英文标题}.html）'
+          : '英文标题将作为文件名，兼容性更好；中文标题用于页面显示'}
+      </Text>
 
-      {/* 作者 */}
-      <Text style={s.label}>作者 *</Text>
-      <TextInput
-        style={s.input}
-        value={form.author}
-        onChangeText={(v) => setField('author', v)}
-        placeholder="作者名"
-        placeholderTextColor={colors.textLight}
-        editable={!lockedMeta}
-      />
+      {/* 词条信息块（entryType==='knowledge'） */}
+      {isKnowledge && (
+        <>
+          <Text style={s.label}>近义词 / 别称</Text>
+          <TextInput
+            style={s.input}
+            value={form.aliases}
+            onChangeText={(v) => setField('aliases', v)}
+            placeholder="如：逆向法、逆向思维（多个用顿号分隔）"
+            placeholderTextColor={colors.textLight}
+            editable={!lockedMeta}
+          />
+
+          <Text style={s.label}>知识分类 *</Text>
+          <View style={s.chipRow}>
+            {KNOWLEDGE_CATEGORY_KEYS.map((k) => (
+              <Pressable
+                key={k}
+                style={[s.chip, form.knowledgeCategory === k && s.chipActive, lockedMeta && s.btnDisabled]}
+                onPress={() => setField('knowledgeCategory', k)}
+                disabled={lockedMeta}
+              >
+                <Text style={[s.chipText, form.knowledgeCategory === k && s.chipTextActive]}>
+                  {KNOWLEDGE_CATEGORIES[k].label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={s.hint}>
+            {(KNOWLEDGE_CATEGORIES[form.knowledgeCategory] ?? KNOWLEDGE_CATEGORIES.phenomenon).desc}
+          </Text>
+        </>
+      )}
+
+      {/* 作者（词条页不显示作者，仅文章需要） */}
+      {!isKnowledge && (
+        <>
+          <Text style={s.label}>作者 *</Text>
+          <TextInput
+            style={s.input}
+            value={form.author}
+            onChangeText={(v) => setField('author', v)}
+            placeholder="作者名"
+            placeholderTextColor={colors.textLight}
+            editable={!lockedMeta}
+          />
+        </>
+      )}
 
       {/* 创建日期 */}
       <Text style={s.label}>创建日期 *</Text>
@@ -126,6 +176,9 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
       </View>
       <Text style={s.hint}>点击「日历」从月历中精确选日期，或点击「自定义」手动输入字符串</Text>
 
+      {/* 文章专属信息块（entryType==='article'）：性质 / 分类 / 新闻 / 标签 / 补充说明 / 脚注 */}
+      {!isKnowledge && (
+        <>
       {/* 文章性质 */}
       <Text style={s.label}>文章性质 *</Text>
       <View style={s.chipRow}>
@@ -260,8 +313,10 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
       >
         <Text style={s.addBtnText}>+ 添加脚注</Text>
       </Pressable>
+        </>
+      )}
 
-      {/* MathJax 开关 */}
+      {/* MathJax 开关（文章与词条共用：两者都可能需要渲染公式） */}
       <View style={s.switchRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>含数学公式</Text>
@@ -275,7 +330,8 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
         />
       </View>
 
-      {/* 隐藏开关 */}
+      {/* 隐藏开关（仅文章：词条的公开列表由知识馆分类页承担） */}
+      {!isKnowledge && (
       <View style={s.switchRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>隐藏文章</Text>
@@ -288,6 +344,7 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
           disabled={lockedMeta}
         />
       </View>
+      )}
 
       {/* 附加区块（如新闻发布页的新闻选项） */}
       {extra}

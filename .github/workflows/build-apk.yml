@@ -1,9 +1,16 @@
 name: Build APK
 
+# 版本规则（见工作区根 AGENTS.md「版本号规则（全软件统一）」）：
+#   package.json 的 version 只维护三位正式版本 A.B.C；
+#   push main / 手动触发 = 测试构建：产物版本 A.B.C-<run_number>，只出 artifact，不建 tag、不建 Release；
+#   推送 vA.B.C 标签 = 正式发布：产物版本 A.B.C，创建 GitHub Release 并上传 APK。
+#   （旧行为「普通 push 也顺手建 Release」已在 alpha 统一规则中废止：Release 只跟随 tag。）
+
 on:
   workflow_dispatch:
   push:
     branches: [main, master]
+    tags: ['v*']
 
 jobs:
   build:
@@ -35,6 +42,17 @@ jobs:
       - name: Apply Android build patches (@expo/dom-webview SDK 52 compat)
         run: node scripts/patch-android.js
 
+      # 测试构建注入第四位（A.B.C-<run_number>）；tag 正式构建不改版本字符串，
+      # 但同样用 run_number 填 Android versionCode，保证两条通道都能装（版本号只增不减）
+      - name: Inject build number
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            node scripts/ci-version.js "${{ github.run_number }}" --official
+          else
+            node scripts/ci-version.js "${{ github.run_number }}"
+          fi
+
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install --clean
 
@@ -42,26 +60,29 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1g"
 
+      - name: Read version
+        id: version
+        run: echo "ver=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: shepherd-library-app-v0.0.15.11-release
+          name: shepherd-library-app-v${{ steps.version.outputs.ver }}-release
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
 
-      - name: Read version
-        id: version
-        run: echo "ver=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release (skip if tag exists)
+      - name: Create GitHub Release (official builds only)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh api "repos/${{ github.repository }}/git/ref/tags/${{ steps.version.outputs.ver }}" >/dev/null 2>&1; then
-            echo "tag ${{ steps.version.outputs.ver }} 已存在，跳过 Release 创建"
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="changelog/CHANGELOG-${TAG#v}.md"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" android/app/build/outputs/apk/release/app-release.apk --clobber
           else
-            gh release create "${{ steps.version.outputs.ver }}" \
+            gh release create "${TAG}" \
               android/app/build/outputs/apk/release/app-release.apk \
-              --title "SlyWrite ${{ steps.version.outputs.ver }}" \
-              --notes "牧羊人图书馆写作管理 App 发布。更新说明见 changelog/CHANGELOG-${{ steps.version.outputs.ver }}.md"
+              --title "SlyWrite ${TAG}" \
+              --notes "牧羊人图书馆写作管理 App 发布。更新说明见 ${NOTES}"
           fi

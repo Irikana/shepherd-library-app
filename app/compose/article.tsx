@@ -1,21 +1,61 @@
-// 撰写页（文章与新闻合并入口）：元数据表单 + Markdown 编辑器（分段切换）+ 草稿自动保存 + 分页锁定
+// 统一撰写页（文章 / 新闻 / 知识词条）：元数据表单 + Markdown 编辑器（分段切换）+ 草稿自动保存 + 分页锁定
 // 0.0.7：新闻不再是独立入口——「在新闻板块展示」成为元数据选项，开启后可选文字/海报形态与海报图
-// 锁定：每个标签页可单独锁定（编辑元数据时锁定正文可放心查看，反之亦然），锁定后表单只读防误触
+// 词条统一：知识词条不再有自己的撰写页与表单，同由本页承载，差异只体现在 form.entryType 上
+//   - 标题栏文案、元数据区块（MetaForm）、工具栏预设与分节状态（MarkdownEditor）、校验、预览生成分支都按 entryType 走
+//   - /compose/knowledge 路由保留为兼容入口，直接渲染本页组件并固定 entryType='knowledge'
+// 「新建 / 继续编辑」的边界（见 compose-store 顶部注释）：
+//   新建由首页入口动作（startNewArticle / startNewKnowledge）决定；草稿箱条目的 loadDraft 是唯一的「继续编辑」入口；
+//   本页卸载（返回退出撰写流程）时把最新表单落盘为草稿并 endSession()，会话 draftId 因此不会被下一次进入沿用；
+//   从预览页 router.back() 回到本页不触发卸载（页面仍在栈里），draftId 与表单原样保留。
 import React, { useEffect } from 'react';
 import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { MetaForm } from '../../src/components/MetaForm';
 import { MarkdownEditor } from '../../src/components/MarkdownEditor';
 import { useComposeStore } from '../../src/store/compose-store';
 import { useConfigStore } from '../../src/store/config-store';
-import { useDraftsStore, articleFormEdited } from '../../src/store/drafts-store';
+import { useDraftsStore, articleFormEdited, draftKindOf } from '../../src/store/drafts-store';
 import { generateArticleHtml } from '../../src/templates/article';
+import {
+  analyzeKnowledgeSections,
+  generateKnowledgeEntryHtml,
+  KNOWLEDGE_SECTIONS,
+} from '../../src/templates/knowledge-entry';
 import { validateArticleHtml } from '../../src/templates/validators';
-import { buildPreviewHtml, getSiteCss } from '../../src/lib/site-style';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
+import type { ArticleFormData, EntryType } from '../../src/types';
 
 type Tab = 'meta' | 'body';
+
+/** 文件名字符非法（仓库路径安全） */
+const INVALID_PATH_CHARS = /[\\/\u0000-\u001f<>:"|?*]|\.\./;
+
+/** 把当前会话表单落盘为草稿（真正编辑过才进草稿箱，全部撤销回默认值则清掉该草稿） */
+function persistDraft(form: ArticleFormData, draftId: string | null): void {
+  if (!draftId) return;
+  const drafts = useDraftsStore.getState();
+  if (articleFormEdited(form)) {
+    void drafts.upsert({
+      id: draftId,
+      title: form.title.trim() || (form.entryType === 'knowledge' ? '未命名词条' : '未命名'),
+      updatedAt: Date.now(),
+      form,
+      kind: draftKindOf(form),
+    });
+  } else {
+    void drafts.remove(draftId);
+  }
+}
+
+/** 词条发布前的分节要求：缺哪一节就明确说哪一节（与分析状态条共用同一份判断） */
+function knowledgeSectionIssues(form: ArticleFormData): string[] {
+  return analyzeKnowledgeSections(form.bodyMarkdown).map((st) => {
+    if (!st.present) return `缺少「${st.def.title}」节：请在正文写一行「## ${st.def.title}」`;
+    if (!st.filled) return `「${st.def.title}」节还是空的：${st.def.hint}`;
+    return '';
+  }).filter(Boolean);
+}
 
 /** 新闻专属选项：新闻形态 + 海报图片（仅在「在新闻板块展示」开启时显示） */
 function NewsOptions() {
@@ -76,41 +116,93 @@ function NewsOptions() {
   );
 }
 
-export default function ComposeArticleScreen() {
+/** 词条分节状态条：让用户在发布前看清哪一节已填写、哪一节还空着 */
+function SectionStatus({ bodyMarkdown }: { bodyMarkdown: string }) {
+  const { colors } = useTheme();
+  const s = createStyles(colors);
+  const states = analyzeKnowledgeSections(bodyMarkdown);
+  return (
+    <View style={s.sectionBar}>
+      <View style={s.sectionBarHeader}>
+        <Text style={s.sectionBarTitle}>分节状态</Text>
+        <Text style={s.sectionBarHint}>
+          词条页按「{SECTION_TITLES}」三节生成，三节都要有内容才能发布
+        </Text>
+      </View>
+      {states.map((st) => {
+        const label = st.filled ? '已填写' : st.present ? '有标题，无内容' : '缺这一节';
+        const style = st.filled ? s.sectionOk : st.present ? s.sectionWarn : s.sectionMissing;
+        return (
+          <View key={st.def.key} style={s.sectionRow}>
+            <Text style={s.sectionName}>{st.def.title}</Text>
+            <Text style={[s.sectionState, style]}>{label}</Text>
+            <Text style={s.sectionTip}>{st.def.hint}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/** 三节标题（状态条提示文案用） */
+const SECTION_TITLES = KNOWLEDGE_SECTIONS.map((sec) => sec.title).join(' / ');
+
+/**
+ * 统一撰写页组件。
+ * @param entryType 路由强制的条目类型（兼容入口 /compose/knowledge 传 'knowledge'）；
+ *                  不传则由首页入口动作 / 草稿恢复决定的会话类型说了算
+ */
+export function ComposeScreen({ entryType }: { entryType?: EntryType }) {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const [tab, setTab] = React.useState<Tab>('meta');
-  const [preparing, setPreparing] = React.useState(false);
-  const { form, locked, scrollPositions, setGeneratedHtml, draftId, startDraft, toggleLock, setScrollPosition } =
+  const { form, locked, scrollPositions, setGeneratedHtml, setField, toggleLock, setScrollPosition } =
     useComposeStore();
   const categories = useConfigStore((s) => s.categories);
   const s = createStyles(colors);
+  const isKnowledge = form.entryType === 'knowledge';
 
-  // 进入撰写页：无草稿上下文时生成新草稿 id（此后编辑会自动保存）
+  // 标题栏与页签文案按条目类型分支
   useEffect(() => {
-    if (!draftId) startDraft();
-  }, [draftId, startDraft]);
+    navigation.setOptions({ title: isKnowledge ? '撰写知识词条' : '撰写文章' });
+  }, [navigation, isKnowledge]);
 
-  // 自动保存草稿（防抖），退出软件重进后可在草稿箱恢复
-  // 0.0.15.8 起：只有真正编辑过（相对默认表单有实际内容变化）才计入草稿箱；
-  // 误开撰写页不再制造「未命名」冗余草稿；编辑后全部撤销回默认值则清掉该草稿
+  // 会话归属：入口动作已决定类型与 draftId；这里只处理两种兜底
+  // 1) 路由要求的类型和当前会话不一致（例如直接进 /compose/knowledge）→ 按要求重新开局（旧会话已落盘为草稿）
+  // 2) 没有草稿上下文（draftId 为 null）→ 按当前类型现开一个会话，否则编辑内容无处保存
+  useEffect(() => {
+    const st = useComposeStore.getState();
+    const type = entryType ?? st.form.entryType;
+    if (st.form.entryType !== type) {
+      if (type === 'knowledge') st.startNewKnowledge();
+      else st.startNewArticle();
+      return;
+    }
+    if (!st.draftId) {
+      if (type === 'knowledge') st.startNewKnowledge();
+      else st.startNewArticle();
+    }
+  }, [entryType]);
+
+  // 自动保存草稿（防抖）：只有真正编辑过才计入草稿箱，全部撤销回默认值则清掉该草稿
+  const draftId = useComposeStore((st) => st.draftId);
   useEffect(() => {
     if (!draftId) return;
-    const t = setTimeout(() => {
-      const drafts = useDraftsStore.getState();
-      if (articleFormEdited(form)) {
-        drafts.upsert({
-          id: draftId,
-          title: form.title.trim() || '未命名',
-          updatedAt: Date.now(),
-          form,
-        });
-      } else {
-        void drafts.remove(draftId);
-      }
-    }, 600);
+    const t = setTimeout(() => persistDraft(form, draftId), 600);
     return () => clearTimeout(t);
   }, [form, draftId]);
+
+  // 退出撰写页（组件卸载）：把最后一次编辑落盘，并结束会话——
+  // 这样「返回后再点入口」得到的一定是新草稿，不会出现「看似新稿实则续写旧草稿」
+  useEffect(
+    () => () => {
+      const st = useComposeStore.getState();
+      persistDraft(st.form, st.draftId);
+      st.endSession();
+    },
+    [],
+  );
 
   /** 切换标签页：保留浏览进度，切换时收起键盘 */
   const switchTab = (next: Tab) => {
@@ -124,19 +216,44 @@ export default function ComposeArticleScreen() {
     toggleLock(tab);
   };
 
-  const handlePreview = async () => {
-    if (!form.title.trim()) {
-      Alert.alert('标题不能为空');
+  const handlePreview = () => {
+    const title = form.title.trim();
+    const titleEn = form.titleEn.trim();
+    if (!title) {
+      Alert.alert(isKnowledge ? '词条标题不能为空' : '标题不能为空');
       return;
     }
-    if (!form.titleEn.trim()) {
-      Alert.alert('英文标题不能为空', '英文标题将作为文件名，用于更好的路径兼容性。');
+    if (!titleEn) {
+      Alert.alert(
+        '英文标题不能为空',
+        isKnowledge ? '英文标题将作为词条页文件名（如 inverse-method）。' : '英文标题将作为文件名，用于更好的路径兼容性。',
+      );
+      return;
+    }
+    if (INVALID_PATH_CHARS.test(titleEn)) {
+      Alert.alert('英文标题不合法', '英文标题将作为文件名，不能包含 / \\ : * ? " < > | 等字符或 ..');
       return;
     }
     if (!form.bodyMarkdown.trim()) {
-      Alert.alert('正文不能为空');
+      Alert.alert(
+        '正文不能为空',
+        isKnowledge ? '请先用正文工具栏的「插入分节」写出概述 / 详细说明 / 历史，再逐节填写。' : '请先撰写正文。',
+      );
       return;
     }
+
+    if (isKnowledge) {
+      // 词条：分节要求与实际生成逻辑一致，缺哪一节提示哪一节
+      const issues = knowledgeSectionIssues(form);
+      if (issues.length) {
+        Alert.alert('词条分节不完整', `${issues.join('\n')}\n\n可用正文工具栏的「插入分节」一键补齐缺失的节标题。`);
+        return;
+      }
+      setGeneratedHtml(generateKnowledgeEntryHtml(form));
+      router.push('/compose/preview');
+      return;
+    }
+
     if (form.isNews && useComposeStore.getState().newsKind === 'poster' && !useComposeStore.getState().posterBase64) {
       Alert.alert('请选择海报图片', '海报新闻需要一张海报图片。');
       return;
@@ -144,6 +261,8 @@ export default function ComposeArticleScreen() {
     // 按所选分类目录生成（深层目录会自动调整相对路径前缀）
     const category = categories.find((c) => c.key === form.category) ?? categories[0];
     const html = generateArticleHtml(form, category.dir, useConfigStore.getState().tagColors);
+    // 存起来的是「要上传到仓库的规范 HTML」；网站样式只在预览渲染时套上（见 preview.tsx），
+    // 否则上传的页面会带着一整份内联 style.css，站点换主题/配色时页面不会跟随
     const result = validateArticleHtml(html);
     if (!result.valid) {
       Alert.alert(
@@ -156,18 +275,7 @@ export default function ComposeArticleScreen() {
       );
       return;
     }
-    setPreparing(true);
-    try {
-      // 读取网站 style.css 内联到预览，真实渲染出网站视觉组件
-      const css = await getSiteCss();
-      const previewHtml = buildPreviewHtml(html, css);
-      goPreview(previewHtml);
-    } catch {
-      // 样式加载失败时回退为无样式预览，不阻塞
-      goPreview(html);
-    } finally {
-      setPreparing(false);
-    }
+    goPreview(html);
   };
 
   const goPreview = (html: string) => {
@@ -185,7 +293,9 @@ export default function ComposeArticleScreen() {
           style={[s.tab, tab === 'meta' && s.tabActive]}
           onPress={() => switchTab('meta')}
         >
-          <Text style={[s.tabText, tab === 'meta' && s.tabTextActive]}>元数据</Text>
+          <Text style={[s.tabText, tab === 'meta' && s.tabTextActive]}>
+            {isKnowledge ? '词条信息' : '元数据'}
+          </Text>
         </Pressable>
         <Pressable
           style={[s.tab, tab === 'body' && s.tabActive]}
@@ -213,25 +323,41 @@ export default function ComposeArticleScreen() {
           <MetaForm
             scrollPosition={scrollPositions.meta}
             onScroll={(y) => setScrollPosition('meta', y)}
-            extra={form.isNews ? <NewsOptions /> : undefined}
+            extra={!isKnowledge && form.isNews ? <NewsOptions /> : undefined}
           />
         </View>
         <View style={[s.page, tab !== 'body' && s.pageHidden]}>
-          <MarkdownEditor
-            scrollPosition={scrollPositions.body}
-            onScroll={(y) => setScrollPosition('body', y)}
-          />
+          {isKnowledge && <SectionStatus bodyMarkdown={form.bodyMarkdown} />}
+          <View style={s.editorArea}>
+            <MarkdownEditor
+              value={form.bodyMarkdown}
+              onChangeText={(t) => setField('bodyMarkdown', t)}
+              footnotes={form.footnotes}
+              entryType={form.entryType}
+              editable={!locked.body}
+              scrollPosition={scrollPositions.body}
+              onScroll={(y) => setScrollPosition('body', y)}
+            />
+          </View>
         </View>
       </View>
 
       {/* 底部预览按钮 */}
       <View style={s.footer}>
-        <Pressable style={[s.previewBtn, preparing && s.btnDisabled]} onPress={handlePreview} disabled={preparing}>
-          <Text style={s.previewBtnText}>{preparing ? '加载网站样式…' : '生成预览'}</Text>
+        <Pressable style={s.previewBtn} onPress={handlePreview}>
+          <Text style={s.previewBtnText}>{isKnowledge ? '生成词条预览' : '生成预览'}</Text>
         </Pressable>
       </View>
     </View>
   );
+}
+
+/** 统一撰写路由：/compose/article（首页入口已把会话设为对应类型），query 里带 entryType 时强制该类型 */
+export default function ComposeArticleRoute() {
+  const params = useLocalSearchParams<{ entryType?: string }>();
+  const forced: EntryType | undefined =
+    params.entryType === 'knowledge' ? 'knowledge' : params.entryType === 'article' ? 'article' : undefined;
+  return <ComposeScreen entryType={forced} />;
 }
 
 const createStyles = (COLORS: Palette) =>
@@ -265,6 +391,24 @@ const createStyles = (COLORS: Palette) =>
     content: { flex: 1 },
     page: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.bg },
     pageHidden: { display: 'none' },
+    editorArea: { flex: 1 },
+    sectionBar: {
+      borderBottomWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+    },
+    sectionBarHeader: { marginBottom: SPACING.xs },
+    sectionBarTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
+    sectionBarHint: { fontSize: 11, color: COLORS.textLight, marginTop: 2, lineHeight: 16 },
+    sectionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },
+    sectionName: { width: 72, fontSize: 13, color: COLORS.text, fontWeight: '600' },
+    sectionState: { width: 96, fontSize: 12, fontWeight: '600' },
+    sectionOk: { color: COLORS.success },
+    sectionWarn: { color: COLORS.warning },
+    sectionMissing: { color: COLORS.danger },
+    sectionTip: { flex: 1, fontSize: 11, color: COLORS.textLight },
     label: {
       fontSize: 14,
       fontWeight: '600',

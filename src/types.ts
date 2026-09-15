@@ -1,7 +1,10 @@
 // 牧羊人图书馆 App - 共享类型定义
 
-/** 撰写会话类型：普通文章 / 新闻（旧草稿兼容标记；0.0.7 起撰写统一入口，新闻为元数据选项） */
-export type ComposeKind = 'article' | 'news';
+/** 撰写条目类型：文章（library/ 下的文章页，含新闻）/ 知识词条（knowledge-hall/ 下的词条页）
+ * 词条是文章的一种：两者共用同一份表单（ArticleFormData）、同一个撰写页与同一套草稿体系，
+ * 由 entryType 决定编辑器工具栏预设、元数据区块、生成模板与发布路径
+ * （旧稿里的 kind='news' 标记只是 Draft 的兼容字段，不再是独立类型） */
+export type EntryType = 'article' | 'knowledge';
 
 /** 文章性质（录音/手写/信息/实验性），区别于文章分类（library/ 下目录） */
 export type ArticleType = '录音文章' | '手写文章' | '信息文章' | '实验性文章';
@@ -9,7 +12,7 @@ export type ArticleType = '录音文章' | '手写文章' | '信息文章' | '�
 /** 知识馆分类（现象 / 可回忆知识 / 可追溯知识） */
 export type KnowledgeCategory = 'phenomenon' | 'recallable' | 'traceable';
 
-/** 知识馆条目表单数据（与文章分开，结构为词条页而非文章页） */
+/** 旧版知识词条表单形状（并入统一表单之前保存的草稿用；新代码一律使用 ArticleFormData + entryType） */
 export interface KnowledgeEntryFormData {
   /** 词条标题（中文，页面显示） */
   title: string;
@@ -32,6 +35,8 @@ export type ArticleTagName = '新闻' | '小说' | '包含AI' | '有删减';
 export type NewsKind = 'text' | 'poster';
 
 export interface ArticleFormData {
+  /** 条目类型：文章（默认）/ 知识词条。旧草稿无此字段时由 Draft.kind 推导（见 drafts-store） */
+  entryType: EntryType;
   title: string;
   /** 英文标题：作为文件名使用（兼容性更好） */
   titleEn: string;
@@ -48,6 +53,10 @@ export interface ArticleFormData {
   includeMathJax: boolean;
   /** 文章分类（library/ 下目录的 key，见 src/lib/article-sync.ts 的 ARTICLE_CATEGORIES） */
   category: string;
+  /** 词条近义词 / 别称（仅 entryType==='knowledge'） */
+  aliases: string;
+  /** 知识馆分类（仅 entryType==='knowledge'；与文章分类 category 各自独立） */
+  knowledgeCategory: KnowledgeCategory;
   /** 是否在新闻板块展示（合并文章/新闻撰写：新闻仅是多一个展示选项 + 新闻标签） */
   isNews: boolean;
   /** 隐藏文章：不同步 library.html 与新闻等公开列表，仅加入站内搜索数据（只能通过查找按钮找到） */

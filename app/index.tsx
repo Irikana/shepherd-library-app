@@ -6,10 +6,12 @@ import type { ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useAuthStore } from '../src/store/auth-store';
+import { useComposeStore } from '../src/store/compose-store';
 import { useDraftsStore } from '../src/store/drafts-store';
 import { rateLimit } from '../src/lib/rate-limit';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 import { PressFX } from '../src/components/PressFX';
+import type { EntryType } from '../src/types';
 import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
@@ -22,15 +24,14 @@ const ENTER_TRANSLATE_Y = 12;
 /** 第 9 项及以后复用：进度恒为 1（无动画），保持渲染路径一致 */
 const ENTER_DONE = new Animated.Value(1);
 
-/** 首页带按压反馈（PressFX）的功能卡片：两个主要撰写入口 */
-const PRIMARY_HREFS = new Set(['/compose/article', '/compose/knowledge']);
-
 interface FeatureItem {
   title: string;
   desc: string;
   href?: string;
   enabled: boolean;
   badge?: string;
+  /** 撰写入口的条目类型：按下时先起对应类型的新会话（= 新建），再进统一撰写页；带按压反馈 */
+  entryType?: EntryType;
 }
 
 /** 平台感知的确认对话框 */
@@ -99,12 +100,14 @@ export default function HomeScreen() {
       desc: '双标题 + Markdown 编辑器，生成合规 HTML 后分类上传；支持在新闻板块展示（含海报）',
       href: '/compose/article',
       enabled: true,
+      entryType: 'article',
     },
     {
       title: '撰写知识词条',
-      desc: '为知识馆（现象 / 可回忆 / 可追溯）创建词条页，发布后自动同步分类页词条列表',
-      href: '/compose/knowledge',
+      desc: '为知识馆（现象 / 可回忆 / 可追溯）创建词条页，正文按 概述 / 详细说明 / 历史 分节，发布后自动同步分类页词条列表',
+      href: '/compose/article',
       enabled: true,
+      entryType: 'knowledge',
     },
     {
       title: '草稿箱',
@@ -200,7 +203,12 @@ export default function HomeScreen() {
       {FEATURES.map((f, i) => {
         const cardStyle = [s.card, !f.enabled && s.cardDisabled];
         const handlePress = () => {
-          if (f.enabled && f.href) router.push(f.href);
+          if (!f.enabled || !f.href) return;
+          // 入口动作 = 新建：先起对应类型的新会话（清表单 + 新 draftId），再进统一撰写页。
+          // 「继续编辑」只从草稿箱进入（草稿箱条目会 loadDraft 带上草稿 id）
+          if (f.entryType === 'knowledge') useComposeStore.getState().startNewKnowledge();
+          else if (f.entryType === 'article') useComposeStore.getState().startNewArticle();
+          router.push(f.href);
         };
         const cardBody = (
           <>
@@ -213,7 +221,7 @@ export default function HomeScreen() {
         );
         return (
           <Animated.View key={f.title} style={enterStyle(i)}>
-            {f.href && PRIMARY_HREFS.has(f.href) ? (
+            {f.entryType ? (
               <PressFX style={cardStyle} onPress={handlePress}>
                 {cardBody}
               </PressFX>

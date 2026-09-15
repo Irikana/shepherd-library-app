@@ -104,7 +104,8 @@ window.addEventListener('DOMContentLoaded', function() {
 </script>`;
 };
 
-const MATHJAX_HEAD = `<script>
+/** MathJax 3 注入片段（文章页与知识词条页共用；表单 includeMathJax 开启时加入 head） */
+export const MATHJAX_HEAD = `<script>
 MathJax = {
   tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']] },
   svg: { fontCache: 'global' }
