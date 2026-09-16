@@ -28,13 +28,16 @@ jobs:
           cache: 'npm'
 
       - name: Setup Java JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      # v3 已失效：它写死的 commandlinetools 下载地址是 2022 年的旧构建号，Google 于
+      # 2026-09-15 前后清理旧包后该步骤直接 404（上游 issue android-actions/setup-android#536
+      # 与「tools package is deprecated」同日报告）。v4 走 cmdline-tools，且不再触发 Node 20 弃用告警。
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install dependencies
         run: npm ci

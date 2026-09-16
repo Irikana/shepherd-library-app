@@ -21,6 +21,7 @@ import {
   analyzeKnowledgeSections,
   generateKnowledgeEntryHtml,
   KNOWLEDGE_SECTIONS,
+  parseRelatedEntries,
 } from '../../src/templates/knowledge-entry';
 import { validateArticleHtml } from '../../src/templates/validators';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
@@ -55,6 +56,15 @@ function knowledgeSectionIssues(form: ArticleFormData): string[] {
     if (!st.filled) return `「${st.def.title}」节还是空的：${st.def.hint}`;
     return '';
   }).filter(Boolean);
+}
+
+/** 「关联词条」里写了却没被识别的行：逐行单独解析，解析不出条目（缺标题或缺路径、外链、页内锚点）的行即非法行 */
+function unparsedRelatedLines(text: string): string[] {
+  return (text || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && parseRelatedEntries(l).length === 0);
 }
 
 /** 新闻专属选项：新闻形态 + 海报图片（仅在「在新闻板块展示」开启时显示） */
@@ -249,8 +259,23 @@ export function ComposeScreen({ entryType }: { entryType?: EntryType }) {
         Alert.alert('词条分节不完整', `${issues.join('\n')}\n\n可用正文工具栏的「插入分节」一键补齐缺失的节标题。`);
         return;
       }
-      setGeneratedHtml(generateKnowledgeEntryHtml(form));
-      router.push('/compose/preview');
+      const html = generateKnowledgeEntryHtml(form);
+      // 关联词条写了但整行都没被识别：进预览前提醒一次，不阻断发布（可继续预览）
+      const skipped = unparsedRelatedLines(form.relatedEntries);
+      if (skipped.length) {
+        Alert.alert(
+          '关联词条有未识别的行',
+          `以下 ${skipped.length} 行未被识别（缺少标题或站内路径，或是站外链接 / 页内锚点），已跳过：\n` +
+            `${skipped.map((l, i) => `${i + 1}. ${l}`).join('\n')}\n\n` +
+            `每行格式：标题|站内相对路径.html|关系说明（可选）\n\n仍要生成预览吗？`,
+          [
+            { text: '返回修改', style: 'cancel' },
+            { text: '继续预览', onPress: () => goPreview(html) },
+          ],
+        );
+        return;
+      }
+      goPreview(html);
       return;
     }
 

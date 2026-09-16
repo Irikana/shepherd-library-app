@@ -57,6 +57,9 @@ export interface ArticleFormData {
   aliases: string;
   /** 知识馆分类（仅 entryType==='knowledge'；与文章分类 category 各自独立） */
   knowledgeCategory: KnowledgeCategory;
+  /** 关联词条（仅 entryType==='knowledge'）：每行一条 `标题|站内相对路径.html|关系说明（可选）`，
+   * 生成 #section-related 的手工条目（排在自动提取的站内链接之前）；留空则完全由正文内部链接汇总 */
+  relatedEntries: string;
   /** 是否在新闻板块展示（合并文章/新闻撰写：新闻仅是多一个展示选项 + 新闻标签） */
   isNews: boolean;
   /** 隐藏文章：不同步 library.html 与新闻等公开列表，仅加入站内搜索数据（只能通过查找按钮找到） */

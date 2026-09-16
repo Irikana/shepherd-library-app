@@ -54,7 +54,7 @@ const TABLE =
 
 const CALLOUT =
   '<div class="callout">\n' +
-  '  <span class="icon">ℹ️</span>\n' +
+  '  <span class="icon">※</span>\n' +
   '  <p>§提示内容</p>\n' +
   '</div>';
 

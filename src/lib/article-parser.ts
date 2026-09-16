@@ -134,6 +134,7 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
     category,
     aliases: '',
     knowledgeCategory: 'phenomenon',
+    relatedEntries: '',
     isNews,
     hidden,
   };

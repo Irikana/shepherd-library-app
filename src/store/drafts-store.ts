@@ -22,7 +22,8 @@ export function articleFormEdited(form: ArticleFormData): boolean {
     form.bodyMarkdown?.trim() ||
     form.footerNote?.trim() ||
     form.recordingDuration?.trim() ||
-    form.aliases?.trim()
+    form.aliases?.trim() ||
+    form.relatedEntries?.trim()
   ) return true;
   if ((form.tags?.length ?? 0) > 0) return true;
   if ((form.footnotes ?? []).some((f) => f?.trim())) return true;

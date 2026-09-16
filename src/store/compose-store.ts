@@ -34,6 +34,7 @@ export const defaultForm: ArticleFormData = {
   category: 'normal',
   aliases: '',
   knowledgeCategory: 'phenomenon',
+  relatedEntries: '',
   isNews: false,
   hidden: false,
 };

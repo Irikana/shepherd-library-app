@@ -201,9 +201,19 @@ interface BuiltSection {
   markdown: string;
 }
 
-/** 从正文里提取站内词条链接（相对 .html 链接），用于 #section-related 与图谱节点 */
-function extractInternalLinks(bodyMarkdown: string, selfTitleEn: string): { text: string; href: string }[] {
-  const found: { text: string; href: string }[] = [];
+/** 相关词条条目（#section-related 的列表项与图谱节点共用；relation 为空时不输出关系说明） */
+export interface RelatedEntry {
+  /** 显示标题 */
+  text: string;
+  /** 站内相对路径（.html） */
+  href: string;
+  /** 关系说明（可选，站点侧结构为 span.kh-related-relation） */
+  relation: string;
+}
+
+/** 从正文里提取站内词条链接（相对 .html 链接）：#section-related 的自动条目来源（手工关联词条之后补充），也用于图谱节点 */
+function extractInternalLinks(bodyMarkdown: string, selfTitleEn: string): RelatedEntry[] {
+  const found: RelatedEntry[] = [];
   const seen = new Set<string>();
   const categoryPages = new Set(Object.values(KNOWLEDGE_CATEGORIES).map((c) => c.page));
   const push = (text: string, rawHref: string) => {
@@ -217,7 +227,7 @@ function extractInternalLinks(bodyMarkdown: string, selfTitleEn: string): { text
     const id = href.toLowerCase();
     if (seen.has(id)) return;
     seen.add(id);
-    found.push({ text: text2, href });
+    found.push({ text: text2, href, relation: '' });
   };
   // Markdown 链接 [text](href)
   const stripped = (bodyMarkdown || '').replace(/(```[\s\S]*?```|`[^`\n]*`)/g, '');
@@ -230,6 +240,42 @@ function extractInternalLinks(bodyMarkdown: string, selfTitleEn: string): { text
   return found;
 }
 
+/** href 清洗：去首尾空白与包裹的尖括号（Markdown 里 `[标题](<a b.html>)` 的写法） */
+function cleanHref(raw: string): string {
+  return (raw || '').trim().replace(/^</, '').replace(/>$/, '').trim();
+}
+
+/** 外部链接与页内锚点：关联词条只用于站内，这些一律忽略 */
+function isNonInternalHref(href: string): boolean {
+  return /^(https?:|mailto:|javascript:|data:|#|\/\/)/i.test(href);
+}
+
+/**
+ * 解析「关联词条」字段文本：每行一条 `标题|站内相对路径.html|关系说明（可选）`。
+ * 容忍全角竖线｜与多余空白；第三段省略时关系说明为空（更多段并入关系说明）；
+ * 跳过缺少标题或缺少路径的行、外链（http/https/mailto/javascript/data、协议相对 //）与页内 #锚点；
+ * 按 href 去重（大小写不敏感）。
+ */
+export function parseRelatedEntries(text: string): RelatedEntry[] {
+  const out: RelatedEntry[] = [];
+  const seen = new Set<string>();
+  for (const rawLine of (text || '').replace(/\r\n/g, '\n').split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const parts = line.split(/[|｜]/).map((p) => p.trim());
+    const title = (parts[0] || '').replace(/[*_`]/g, '').trim();
+    const href = cleanHref(parts[1] || '');
+    const relation = parts.slice(2).filter(Boolean).join(' ').trim();
+    if (!title || !href) continue;
+    if (isNonInternalHref(href)) continue;
+    const id = href.toLowerCase();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ text: title, href, relation });
+  }
+  return out;
+}
+
 /**
  * 把正文 Markdown 归组成网站权威分节结构。
  * 映射规则：
@@ -237,12 +283,13 @@ function extractInternalLinks(bodyMarkdown: string, selfTitleEn: string): { text
  *  - 第一个 H2 之前的引言段：概述为空时用作概述，否则并入详细说明开头（内容不丢）
  *  - 未匹配到任何规范节的 H2：作为补充节排在 #section-history 之后（id 为 section-extra-N），内容不丢
  *  - 全文没有任何 H2：降级为 #section-detail 放全文、#section-summary 放首段，保证生成页不空白
- *  - #section-related：优先用用户写的「相关词条」节；否则从正文内部链接自动汇总；再否则输出空节
+ *  - #section-related：优先用用户写的「相关词条」节；否则用「关联词条」字段的手工条目（在前）
+ *    加上正文内部链接自动提取的条目（去重后补在后面）生成列表；再否则输出空节
  */
-export function buildKnowledgeSections(bodyMarkdown: string, selfTitleEn = ''): {
+export function buildKnowledgeSections(bodyMarkdown: string, selfTitleEn = '', relatedFieldText = ''): {
   sections: BuiltSection[];
   relatedHtml: string;
-  relatedEntries: { text: string; href: string }[];
+  relatedEntries: RelatedEntry[];
 } {
   const { preamble, groups } = splitByH2(bodyMarkdown);
   const bucket: Record<KnowledgeSectionKey, string> = { summary: '', detail: '', history: '' };
@@ -279,11 +326,24 @@ export function buildKnowledgeSections(bodyMarkdown: string, selfTitleEn = ''): 
     }
   });
 
-  const relatedEntries = extractInternalLinks(bodyMarkdown, selfTitleEn);
+  // 合并顺序：手工条目在前，正文自动提取的条目去重后补在后面（同一 href 只保留一条，手工优先）
+  const relatedEntries: RelatedEntry[] = [];
+  const seenHref = new Set<string>();
+  for (const e of [...parseRelatedEntries(relatedFieldText), ...extractInternalLinks(bodyMarkdown, selfTitleEn)]) {
+    const id = e.href.toLowerCase();
+    if (seenHref.has(id)) continue;
+    seenHref.add(id);
+    relatedEntries.push(e);
+  }
   let relatedHtml = marked.parse(relatedMarkdown, { async: false }) as string;
   if (!relatedHtml.trim() && relatedEntries.length) {
     relatedHtml = `<ul class="kh-related-list">\n${relatedEntries
-      .map((e) => `        <li><a href="${escapeHtml(e.href)}">${escapeHtml(e.text)}</a></li>`)
+      .map((e) => {
+        const relation = e.relation
+          ? `\n        <span class="kh-related-relation">${escapeHtml(e.relation)}</span>`
+          : '';
+        return `        <li><a href="${escapeHtml(e.href)}">${escapeHtml(e.text)}</a>${relation}</li>`;
+      })
       .join('\n')}\n      </ul>`;
   } else {
     relatedHtml = relatedHtml.trim();
@@ -347,7 +407,11 @@ export function generateKnowledgeEntryHtml(data: ArticleFormData): string {
   // 词条页与分类页同层（knowledge-hall/categories/x.html），站点根前缀固定为 ../../
   const rootPrefix = '../../';
 
-  const { sections, relatedHtml, relatedEntries } = buildKnowledgeSections(data.bodyMarkdown, data.titleEn);
+  const { sections, relatedHtml, relatedEntries } = buildKnowledgeSections(
+    data.bodyMarkdown,
+    data.titleEn,
+    data.relatedEntries ?? '',
+  );
 
   const sectionHtml = sections
     .map((sec) => {
@@ -359,7 +423,7 @@ export function generateKnowledgeEntryHtml(data: ArticleFormData): string {
     })
     .join('\n\n');
 
-  // 图谱节点：优先用提取到的相关词条，不足四个时补分类与知识馆
+  // 图谱节点：沿用合并后的相关词条（手工优先），不足四个时补分类与知识馆
   const nodeEntries = relatedEntries.slice(0, GRAPH_SPOTS.length);
   const fillers = [cat.label, '知识馆'];
   const nodes: { text: string; href: string | null }[] = nodeEntries.map((e) => ({ text: e.text, href: e.href }));

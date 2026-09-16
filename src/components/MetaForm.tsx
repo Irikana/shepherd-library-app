@@ -140,6 +140,23 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
           <Text style={s.hint}>
             {(KNOWLEDGE_CATEGORIES[form.knowledgeCategory] ?? KNOWLEDGE_CATEGORIES.phenomenon).desc}
           </Text>
+
+          <Text style={s.label}>关联词条</Text>
+          <TextInput
+            style={[s.input, s.inputMultiline]}
+            value={form.relatedEntries}
+            onChangeText={(v) => setField('relatedEntries', v)}
+            placeholder={'每行一条：标题|站内相对路径.html|关系说明（可选）\n逆向法·下滑问题|../../library/paper/backwards-sliding-problem.html|同类方法的另一例'}
+            placeholderTextColor={colors.textLight}
+            multiline
+            editable={!lockedMeta}
+          />
+          <Text style={s.hint}>
+            每行一条，用竖线分成三段：标题|站内相对路径.html|关系说明，第三段关系说明可省略。
+            路径写站内相对链接（词条页与分类页同层，写 ./xxx.html 或用 ../.. 回到站根的写法都可以），站外链接与页内 #锚点会被忽略。
+            留空则自动从正文里的站内链接汇总相关词条。
+            非法行（缺标题或缺路径）会被跳过，并在生成预览前提示。
+          </Text>
         </>
       )}
 
