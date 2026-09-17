@@ -12,6 +12,7 @@
 - **上传到仓库的页面带着一整份内联站点 CSS**：`generatedHtml` 原先存的是套好网站样式的预览产物，发布时把这坨内联 CSS 一起提交、还丢掉了精修样式表的链接。现在上传内容一律是规范 HTML（只留 `<link>`），网站样式只在预览渲染时临时套上。文章与知识词条一并受益
 - **App 生成的知识词条页不跟随网站配色**：模板此前内联一整套知识馆骨架 CSS 与三套手写明暗覆写，颜色写死，把站点六套配色全数盖掉。现在骨架与配色由站点 `css/library-refit.css` 与主题令牌统一承担，模板只保留词条页独有构件
 - **跨零点后空白稿也会掉进草稿箱**：「是否真正编辑过」原来拿表单日期与模块加载时算出的默认日期比，App 常驻跨过后半夜再新建时两者相差一天，空白稿会被误判为已编辑；现改为与「当天」比，文章与词条两条判定一致
+- **生成的知识词条页资源与导航全部指错层级**：词条实际上传到 `knowledge-hall/categories/{分类}/{文件}.html`，模板却按「与分类页同层」计算路径，导致样式、脚本、Logo、知识馆主页、分类页和返回链接失效。现按真实三级目录修正：站点资源上溯三级，知识馆主页上溯两级，分类页与返回链接上溯一级
 
 ### 新增
 
@@ -22,18 +23,21 @@
 - **CI 构建号注入脚本 `scripts/ci-version.js`**：测试构建把版本扩为 `A.B.C-<run_number>` 并填 `versionCode`；tag 正式构建保持 `A.B.C` 但仍注入 `versionCode`，使测试与正式两条通道的安装包不会互相倒退
 - **草稿箱类型标签**：条目上标出「文章 / 知识词条」，两类草稿在同一列表里可辨识
 - **正文插入构件去表情**：Callout 片段图标位由表情符号改为站点统一的排版符号 ※（与站点 alpha-023 的组件标准一致，界面文案不再出现 emoji）
+- **知识词条补齐作者元数据**：生成页的 `.kh-entry-meta` 现在输出经过 HTML 转义的作者字段，供站点读者操作构件生成完整引用条目；缺失时回退为「薛柯道」
 
 ### 改进
 
 - **知识词条并入文章子类型（缺陷 C）**：表单新增 `entryType`（`article` / `knowledge`）与词条字段（别称、知识分类），不再有两套并行的编辑态与草稿体系；`knowledge-store` 删除，`/compose/knowledge`、`/compose/knowledge-preview` 保留为渲染同一组件的兼容入口；旧草稿在**读取时**迁移（不覆写存储），旧知识草稿的分类字段自动归位到 `knowledgeCategory`
 - **会话生命周期显式化**：退出撰写流程时把最新表单落盘为草稿并结束会话，从预览页返回不算退出（会话保留），草稿 id 的复用规则写在 store 顶部注释里
 - **草稿 id 兜底**：撰写页挂载时若无草稿上下文（直接进入或发布后回到该页）按当前条目类型现开会话，避免出现「有内容却没有可保存的草稿 id」
+- **导航枢纽随发布同步**：发布、隐藏和取消隐藏文章时，除 `library.html` 外同步维护 `navigator.html` 对应分类，重复执行不会生成重复条目；取消隐藏时按目录恢复分类锚点，不再因缺少锚点文本而无法插回清单
+- **旧词条草稿分节引导**：正文已有内容但缺少知识词条三节时，分节状态条直接说明「插入分节」只补标题、不改既有正文，降低旧草稿迁移时的误解
 
 ### 版本与构建
 
 - **版本号收敛为三段**：`package.json` / `app.json` 由旧规则的 `0.0.15.11` 改为正式版本 `0.0.16`（第四位构建号从此只由 CI 注入，仓库里不再出现四段号）
 - **`build-apk.yml` 与统一发版规则对齐**：新增 tag 触发（`tags: ['v*']`）；**GitHub Release 只在 tag 构建时创建**（此前普通 push 也会自动建 Release，与「测试构建只留 artifact、不建 tag/Release」的规则冲突）；产物名改为从 `package.json` 读取版本，不再硬编码旧版本号
-- **修复 CI 构建在「Setup Android SDK」一步 11 秒内失败**：`android-actions/setup-android@v3` 写死的 commandline-tools 下载地址已被 Google 清理，2026-09-15 起该步骤直接 404（上游 android-actions/setup-android#536 与「`tools` package is deprecated」同日报告），构建还没走到 `npm ci` 就断了。现升 `@v4`，`actions/setup-java` 同步升到不再弃用的 v5；SlyWrite Lite 的同源 CI 一并对齐
+- **修复 CI 构建在「Setup Android SDK」一步十余秒内失败**：`android-actions/setup-android@v3` 与 `@v4` 都会在 runner 预装版本不匹配时下载已失效的固定 commandline-tools 包，构建尚未走到 `npm ci` 就中断。现移除该 action，直接使用 GitHub runner 镜像自带 Android SDK，并由 `sdkmanager --list_installed` 按需补齐组件；`actions/setup-java` 同步升到 v5，SlyWrite Lite 的同源 CI 一并对齐
 
 ### 配套站点变更（同日发布）
 

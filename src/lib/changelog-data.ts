@@ -1493,6 +1493,10 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "**跨零点后空白稿也会掉进草稿箱**：「是否真正编辑过」原来拿表单日期与模块加载时算出的默认日期比，App 常驻跨过后半夜再新建时两者相差一天，空白稿会被误判为已编辑；现改为与「当天」比，文章与词条两条判定一致"
       },
       {
+        "kind": "bullet",
+        "text": "**生成的知识词条页资源与导航全部指错层级**：词条实际上传到 `knowledge-hall/categories/{分类}/{文件}.html`，模板却按「与分类页同层」计算路径，导致样式、脚本、Logo、知识馆主页、分类页和返回链接失效。现按真实三级目录修正：站点资源上溯三级，知识馆主页上溯两级，分类页与返回链接上溯一级"
+      },
+      {
         "kind": "section",
         "text": "新增"
       },
@@ -1525,6 +1529,10 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "**正文插入构件去表情**：Callout 片段图标位由表情符号改为站点统一的排版符号 ※（与站点 alpha-023 的组件标准一致，界面文案不再出现 emoji）"
       },
       {
+        "kind": "bullet",
+        "text": "**知识词条补齐作者元数据**：生成页的 `.kh-entry-meta` 现在输出经过 HTML 转义的作者字段，供站点读者操作构件生成完整引用条目；缺失时回退为「薛柯道」"
+      },
+      {
         "kind": "section",
         "text": "改进"
       },
@@ -1541,6 +1549,14 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "**草稿 id 兜底**：撰写页挂载时若无草稿上下文（直接进入或发布后回到该页）按当前条目类型现开会话，避免出现「有内容却没有可保存的草稿 id」"
       },
       {
+        "kind": "bullet",
+        "text": "**导航枢纽随发布同步**：发布、隐藏和取消隐藏文章时，除 `library.html` 外同步维护 `navigator.html` 对应分类，重复执行不会生成重复条目；取消隐藏时按目录恢复分类锚点，不再因缺少锚点文本而无法插回清单"
+      },
+      {
+        "kind": "bullet",
+        "text": "**旧词条草稿分节引导**：正文已有内容但缺少知识词条三节时，分节状态条直接说明「插入分节」只补标题、不改既有正文，降低旧草稿迁移时的误解"
+      },
+      {
         "kind": "section",
         "text": "版本与构建"
       },
@@ -1554,7 +1570,7 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
       },
       {
         "kind": "bullet",
-        "text": "**修复 CI 构建在「Setup Android SDK」一步 11 秒内失败**：`android-actions/setup-android@v3` 写死的 commandline-tools 下载地址已被 Google 清理，2026-09-15 起该步骤直接 404（上游 android-actions/setup-android#536 与「`tools` package is deprecated」同日报告），构建还没走到 `npm ci` 就断了。现升 `@v4`，`actions/setup-java` 同步升到不再弃用的 v5；SlyWrite Lite 的同源 CI 一并对齐"
+        "text": "**修复 CI 构建在「Setup Android SDK」一步十余秒内失败**：`android-actions/setup-android@v3` 与 `@v4` 都会在 runner 预装版本不匹配时下载已失效的固定 commandline-tools 包，构建尚未走到 `npm ci` 就中断。现移除该 action，直接使用 GitHub runner 镜像自带 Android SDK，并由 `sdkmanager --list_installed` 按需补齐组件；`actions/setup-java` 同步升到 v5，SlyWrite Lite 的同源 CI 一并对齐"
       },
       {
         "kind": "section",

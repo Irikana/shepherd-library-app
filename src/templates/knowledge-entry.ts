@@ -403,9 +403,10 @@ export function generateKnowledgeEntryHtml(data: ArticleFormData): string {
   const cat = KNOWLEDGE_CATEGORIES[categoryKey] ?? KNOWLEDGE_CATEGORIES.phenomenon;
   const titleSafe = escapeHtml(data.title);
   const aliasesSafe = escapeHtml(data.aliases || '');
+  const authorSafe = escapeHtml(data.author || '薛柯道');
   const dateCN = formatDateCN(data.createDate);
-  // 词条页与分类页同层（knowledge-hall/categories/x.html），站点根前缀固定为 ../../
-  const rootPrefix = '../../';
+  // 词条上传到 knowledge-hall/categories/{分类}/{文件}.html，回站点根目录需上溯三级。
+  const rootPrefix = '../../../';
 
   const { sections, relatedHtml, relatedEntries } = buildKnowledgeSections(
     data.bodyMarkdown,
@@ -475,10 +476,10 @@ ${ENTRY_PAGE_CSS}
 
   <div class="kh-nav-divider"></div>
 
-  <a href="../index.html" class="kh-nav-item">知识馆主页 </a>
-  <a href="${KNOWLEDGE_CATEGORIES.phenomenon.page}" class="kh-nav-item${categoryKey === 'phenomenon' ? ' active' : ''}">现象 </a>
-  <a href="${KNOWLEDGE_CATEGORIES.recallable.page}" class="kh-nav-item${categoryKey === 'recallable' ? ' active' : ''}">可回忆知识 </a>
-  <a href="${KNOWLEDGE_CATEGORIES.traceable.page}" class="kh-nav-item${categoryKey === 'traceable' ? ' active' : ''}">可追溯知识 </a>
+  <a href="../../index.html" class="kh-nav-item">知识馆主页 </a>
+  <a href="../${KNOWLEDGE_CATEGORIES.phenomenon.page}" class="kh-nav-item${categoryKey === 'phenomenon' ? ' active' : ''}">现象 </a>
+  <a href="../${KNOWLEDGE_CATEGORIES.recallable.page}" class="kh-nav-item${categoryKey === 'recallable' ? ' active' : ''}">可回忆知识 </a>
+  <a href="../${KNOWLEDGE_CATEGORIES.traceable.page}" class="kh-nav-item${categoryKey === 'traceable' ? ' active' : ''}">可追溯知识 </a>
 
   <div class="kh-nav-divider"></div>
 
@@ -488,13 +489,17 @@ ${ENTRY_PAGE_CSS}
 
 <main id="main-content" class="kh-main kh-content">
 
-  <a href="${cat.page}" class="kh-entry-back">返回${cat.label}</a>
+  <a href="../${cat.page}" class="kh-entry-back">返回${cat.label}</a>
 
   <h1 class="kh-entry-title">${titleSafe}</h1>
 
   <div class="kh-entry-aliases">${aliasesSafe}</div>
 
   <div class="kh-entry-meta">
+    <span class="kh-entry-meta-item">
+      <span class="kh-entry-meta-label">作者：</span>
+      <span class="kh-entry-meta-value">${authorSafe}</span>
+    </span>
     <span class="kh-entry-meta-item">
       <span class="kh-entry-meta-label">分类：</span>
       <span class="kh-entry-meta-value"><span class="kh-entry-category-badge">${cat.label}</span></span>
