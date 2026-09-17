@@ -33,11 +33,32 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # v3 已失效：它写死的 commandlinetools 下载地址是 2022 年的旧构建号，Google 于
-      # 2026-09-15 前后清理旧包后该步骤直接 404（上游 issue android-actions/setup-android#536
-      # 与「tools package is deprecated」同日报告）。v4 走 cmdline-tools，且不再触发 Node 20 弃用告警。
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+      # 不再依赖 android-actions/setup-android：v3 与 v4 都会在「镜像里预装的 cmdline-tools 版本
+      # 不等于它写死的版本」时去下载一个固定构建号的 commandline-tools 包，Google 清理旧包后该下载
+      # 一律 404 —— 本仓库 run 35035978640（v3）与 35054440736（v4）都断在 Setup Android SDK，
+      # 11 秒内失败，连 npm ci 都没跑到；上游 issue android-actions/setup-android#536 报的是同一个坑。
+      # ubuntu runner 镜像自带 Android SDK 与 sdkmanager，这里只做定位与许可确认，
+      # 缺的平台 / 构建工具交给 AGP 自己按需下载。
+      - name: Use preinstalled Android SDK
+        run: |
+          set -euo pipefail
+          SDK_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          SDKM="$(command -v sdkmanager || true)"
+          if [ -z "$SDKM" ]; then
+            SDKM="$(find "$SDK_DIR/cmdline-tools" -type f -name sdkmanager 2>/dev/null | head -n 1 || true)"
+          fi
+          if [ -z "$SDKM" ]; then echo "runner 镜像里找不到 sdkmanager，镜像可能又变了" >&2; exit 1; fi
+          echo "sdkmanager: $SDKM"
+          "$SDKM" --version
+          yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+          # 只补镜像里缺的组件：走 sdkmanager 的当前仓库清单，不再有写死的下载地址
+          INST="$("$SDKM" --list_installed 2>/dev/null || true)"
+          for pkg in "platform-tools" "build-tools;35.0.0" "build-tools;34.0.0" "platforms;android-35" "platforms;android-34"; do
+            echo "$INST" | grep -q -- "$pkg" || { echo "补装 $pkg"; "$SDKM" "$pkg" >/dev/null; }
+          done
+          "$SDKM" --list_installed 2>/dev/null | sed -n '1,40p' || true
 
       - name: Install dependencies
         run: npm ci
