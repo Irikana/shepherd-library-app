@@ -28,7 +28,7 @@ import { putFile, getFile } from '../src/lib/github-client';
 import { useEditorStore } from '../src/store/editor-store';
 import { useConfigStore } from '../src/store/config-store';
 import { updateArticleHtml } from '../src/lib/article-parser';
-import { insertIntoLibraryHtml, removeFromLibraryHtml } from '../src/lib/article-sync';
+import { insertIntoLibraryHtml, removeFromLibraryHtml, insertIntoNavigatorHtml, removeFromNavigatorHtml, ARTICLE_CATEGORIES } from '../src/lib/article-sync';
 import type { ArticleCategory } from '../src/lib/article-sync';
 import type { ArticleFormData } from '../src/types';
 import { removeNewsItem, syncNewsSections } from '../src/lib/news-sync';
@@ -80,7 +80,10 @@ async function syncVisibility(
     ? targetPath.slice('library/'.length).split('/').slice(0, -1).join('/')
     : '';
   if (!catDir) return { ok, fail };
-  const category: ArticleCategory = { key: catDir, label: catDir, dir: catDir, anchor: '', enAnchor: '' };
+  // 优先映射到已知分类（带 library.html / navigator.html 的锚点文本）；
+  // 自定义分类目录仍退回按目录推断的临时对象（此时无锚点，插入会走「未找到分类锚点」提示）
+  const known = ARTICLE_CATEGORIES.find((c) => c.dir === catDir);
+  const category: ArticleCategory = known ?? { key: catDir, label: catDir, dir: catDir, anchor: '', enAnchor: '' };
   const titleEn = fileName.replace(/\.html?$/, '');
   const isNews = metadata.tags.includes('新闻');
 
@@ -101,6 +104,24 @@ async function syncVisibility(
         }
       } catch (e) {
         fail.push(`${libPath} 移除失败：${(e as Error).message}`);
+      }
+    }
+    // 导航枢纽（navigator.html 只有中文版）：自定义分类无锚点，跳过
+    if (known) {
+      try {
+        const { content: navContent, sha: navSha } = await getFile('navigator.html');
+        const updated = removeFromNavigatorHtml(navContent, category, fileName);
+        if (updated !== navContent) {
+          await putFile('navigator.html', updated, {
+            sha: navSha,
+            message: `已隐藏文章：${metadata.title}（navigator.html，移动端 App）`,
+          });
+          ok.push('navigator.html 已移除文章条目');
+        } else {
+          ok.push('navigator.html 未找到文章条目（可能已移除）');
+        }
+      } catch (e) {
+        fail.push(`navigator.html 移除失败：${(e as Error).message}`);
       }
     }
     // 新闻文章：从新闻板块移除
@@ -140,6 +161,24 @@ async function syncVisibility(
         }
       } catch (e) {
         fail.push(`${libPath} 插入失败：${(e as Error).message}`);
+      }
+    }
+    // 导航枢纽（navigator.html 只有中文版，且只认四个标准分类锚点）
+    if (known) {
+      try {
+        const { content: navContent, sha: navSha } = await getFile('navigator.html');
+        const updated = insertIntoNavigatorHtml(navContent, category, fileName, displayTitle);
+        if (updated !== navContent) {
+          await putFile('navigator.html', updated, {
+            sha: navSha,
+            message: `已取消隐藏文章：${metadata.title}（navigator.html，移动端 App）`,
+          });
+          ok.push('navigator.html 已插入文章条目');
+        } else {
+          ok.push('navigator.html 未找到分类或条目已存在');
+        }
+      } catch (e) {
+        fail.push(`navigator.html 插入失败：${(e as Error).message}`);
       }
     }
     // 新闻文章：重新插入新闻板块

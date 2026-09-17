@@ -228,13 +228,8 @@ MathJax = {
 </script>
 <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>`;
 
-/** 脚注样式块 */
-const FOOTNOTE_STYLE = `\n<style>
-.article-footnote-ref a { text-decoration: none; color: var(--color-accent); font-weight: 600; }
-.article-footnote-list { font-style: normal; }
-.article-footnote-item { display: block; margin: 3px 0; font-style: normal; line-height: 1.7; }
-.article-footnote-back { text-decoration: none; color: var(--color-accent); margin-left: 4px; font-weight: 600; }
-</style>`;
+// 脚注构件的样式（上标引用、页脚条目、返回链接）唯一实现在站点 css/style.css，
+// 页面只写结构；早期版本随页注入的内联 <style> 副本由 updateArticleHtml 负责清除。
 
 /**
  * 将更新后的元数据写回文章 HTML（保留正文 HTML 不变）
@@ -308,12 +303,9 @@ export function updateArticleHtml(html: string, form: ArticleFormData, tagColors
     result = result.replace(/<script>\s*MathJax\s*=\s*\{[\s\S]*?\};\s*<\/script>\s*<script id="MathJax-script"[\s\S]*?<\/script>\n?/, '');
   }
 
-  // 6. 切换脚注样式（有脚注时添加，无脚注时移除）
-  const hasFootnoteStyle = result.includes('.article-footnote-ref a');
-  const needsFootnoteStyle = form.footnotes.some((f) => f.trim()) || /\[\^\d+\]/.test(form.bodyMarkdown || '');
-  if (needsFootnoteStyle && !hasFootnoteStyle) {
-    result = result.replace('</head>', `${FOOTNOTE_STYLE}\n</head>`);
-  } else if (!needsFootnoteStyle && hasFootnoteStyle) {
+  // 6. 脚注构件样式一律不在页面内联：其唯一实现在站点 css/style.css（组件标准 3.6b），
+  //    这里只负责把历史页面里残留的内联副本清掉，使重新保存的页面回归「只写结构」
+  if (result.includes('.article-footnote-ref a')) {
     result = result.replace(/\n?<style>\s*\.article-footnote-ref[\s\S]*?<\/style>/, '');
   }
 

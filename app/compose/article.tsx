@@ -131,6 +131,10 @@ function SectionStatus({ bodyMarkdown }: { bodyMarkdown: string }) {
   const { colors } = useTheme();
   const s = createStyles(colors);
   const states = analyzeKnowledgeSections(bodyMarkdown);
+  // 旧稿引导：分节功能之前存的词条草稿正文里一个分节标题都没有（三节全缺），
+  // 但正文是有内容的——这类草稿最需要的一句提醒是「插入分节只补标题，不动你已写的正文」。
+  // 引导只在「有正文 + 三节全无」时出现，点过一次「插入分节」后自然消失，不弹窗、不持久化、不自动改正文。
+  const legacyDraft = states.every((st) => !st.present) && bodyMarkdown.trim().length > 0;
   return (
     <View style={s.sectionBar}>
       <View style={s.sectionBarHeader}>
@@ -139,6 +143,14 @@ function SectionStatus({ bodyMarkdown }: { bodyMarkdown: string }) {
           词条页按「{SECTION_TITLES}」三节生成，三节都要有内容才能发布
         </Text>
       </View>
+      {legacyDraft && (
+        <View style={s.sectionGuide}>
+          <Text style={s.sectionGuideText}>
+            这篇草稿的正文还没有分节（多为分节功能上线前存下的旧稿）。点正文工具栏的「插入分节」，
+            只会补上缺失的三节标题，你已写好的正文不会被改动；补好后把内容分别归到各节下即可。
+          </Text>
+        </View>
+      )}
       {states.map((st) => {
         const label = st.filled ? '已填写' : st.present ? '有标题，无内容' : '缺这一节';
         const style = st.filled ? s.sectionOk : st.present ? s.sectionWarn : s.sectionMissing;
@@ -425,6 +437,15 @@ const createStyles = (COLORS: Palette) =>
       paddingVertical: SPACING.sm,
     },
     sectionBarHeader: { marginBottom: SPACING.xs },
+    sectionGuide: {
+      borderLeftWidth: 3,
+      borderLeftColor: COLORS.warning,
+      backgroundColor: COLORS.bg,
+      paddingVertical: SPACING.xs,
+      paddingRight: SPACING.sm,
+      marginBottom: SPACING.xs,
+    },
+    sectionGuideText: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18 },
     sectionBarTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
     sectionBarHint: { fontSize: 11, color: COLORS.textLight, marginTop: 2, lineHeight: 16 },
     sectionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },

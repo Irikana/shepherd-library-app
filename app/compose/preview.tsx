@@ -28,8 +28,10 @@ import { publishKnowledgeEntry } from '../../src/lib/knowledge-sync';
 import {
   buildSearchKeywords,
   insertIntoLibraryHtml,
+  insertIntoNavigatorHtml,
   insertSearchEntry,
   removeFromLibraryHtml,
+  removeFromNavigatorHtml,
 } from '../../src/lib/article-sync';
 import { removeNewsItem, syncNewsSections } from '../../src/lib/news-sync';
 import { SPACING, useTheme, type Palette } from '../../src/theme';
@@ -203,6 +205,19 @@ export function PreviewScreen() {
       } catch {
         steps.push('en/library/library.html 移除失败（可手动添加）');
       }
+      try {
+        const { content, sha } = await getFile('navigator.html');
+        const updated = removeFromNavigatorHtml(content, category, `${titleEn}.html`);
+        if (updated !== content) {
+          await putFile('navigator.html', updated, {
+            sha,
+            message: `隐藏文章：${title}（navigator.html，移动端 App）`,
+          });
+          steps.push('navigator.html 已移除文章条目');
+        }
+      } catch {
+        steps.push('navigator.html 移除失败（可手动添加）');
+      }
       if (form.isNews) {
         const newsSteps = await removeNewsItem({
           title,
@@ -243,6 +258,21 @@ export function PreviewScreen() {
       }
     } catch {
       steps.push('en/library/library.html 同步失败（可手动添加）');
+    }
+
+    // 4b. 导航枢纽同步（navigator.html 只有中文版，链接相对站点根）
+    try {
+      const { content, sha } = await getFile('navigator.html');
+      const updated = insertIntoNavigatorHtml(content, category, `${titleEn}.html`, title);
+      if (updated !== content) {
+        await putFile('navigator.html', updated, {
+          sha,
+          message: `导航枢纽同步：${title}（移动端 App）`,
+        });
+        steps.push('navigator.html 已同步');
+      }
+    } catch {
+      steps.push('navigator.html 同步失败（可手动添加）');
     }
 
     // 5. 新闻板块同步（form.isNews 时触发）

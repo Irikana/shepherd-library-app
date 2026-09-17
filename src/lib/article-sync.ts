@@ -196,3 +196,67 @@ export function removeFromLibraryHtml(
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+// ──────────────────────────────────────────────
+// 导航枢纽 navigator.html：文章清单同步
+// 站点实际写法（逐字对齐）：分组标题 <p><strong>普通文章</strong></p>，
+// 其下连续的条目段落 <p class="left-align">文章链接：<a href="./library/{dir}/{file}">标题</a></p>
+// 该页只有中文版（站点没有 en/navigator.html），故不做英文分支
+// ──────────────────────────────────────────────
+
+/** 导航枢纽的一条文章条目 */
+function navigatorItemHtml(href: string, displayTitle: string): string {
+  return `<p class="left-align">文章链接：<a href="${href}">${displayTitle}</a></p>`;
+}
+
+/**
+ * 在 navigator.html 对应分类的末尾插入一条文章链接
+ * 分类以 <p><strong>{分类锚点}</strong></p> 起头，条目为该标题下方连续的「文章链接：」段落；
+ * 分类不存在或同路径条目已存在时返回原样（幂等，可重复调用）
+ * @param html navigator.html 内容
+ * @param category 文章分类
+ * @param fileName 文件名（如 xxx.html）
+ * @param displayTitle 显示标题（中文）
+ */
+export function insertIntoNavigatorHtml(
+  html: string,
+  category: ArticleCategory,
+  fileName: string,
+  displayTitle: string,
+): string {
+  const href = `./library/${category.dir}/${fileName}`;
+  if (html.includes(`href="${href}"`)) return html;
+  const lines = html.split('\n');
+  const head = `<p><strong>${category.anchor}</strong></p>`;
+  const headIdx = lines.findIndex((l) => l.trim() === head);
+  if (headIdx < 0) return html;
+  // 本组最后一条条目：从分组标题往下扫连续的条目段落（空行跳过，遇到别的内容即止）
+  let last = headIdx;
+  for (let i = headIdx + 1; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (t.startsWith('<p class="left-align">文章链接：')) last = i;
+    else if (t === '') continue;
+    else break;
+  }
+  const indent = (lines[last].match(/^[ \t]*/) || [''])[0];
+  lines.splice(last + 1, 0, `${indent}${navigatorItemHtml(href, displayTitle)}`);
+  return lines.join('\n');
+}
+
+/**
+ * 从 navigator.html 移除指向该文件的条目（隐藏 / 下架文章时用）
+ * 按 href 精确匹配，只删条目段落本身，找不到时返回原样
+ */
+export function removeFromNavigatorHtml(
+  html: string,
+  category: ArticleCategory,
+  fileName: string,
+): string {
+  const baseName = fileName.split('/').pop() || fileName;
+  const re = new RegExp(
+    `^[ \\t]*<p class="left-align">文章链接：<a href="[^"]*${escapeRegex(category.dir)}/${escapeRegex(baseName)}">.*?</a></p>\\r?\\n`,
+    'gm',
+  );
+  return html.replace(re, '');
+}
+

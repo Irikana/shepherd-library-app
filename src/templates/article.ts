@@ -220,16 +220,9 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
     ? `\n\n      <div class="article-footer-meta">\n${footerParts.join('\n')}\n      </div>`
     : '';
 
-  // 脚注相关样式（上标引用 + 页脚条目）：正文有 [n] 引用或页脚有脚注时注入
-  const hasFootnoteRefs = /\[\^\d+\]/.test(data.bodyMarkdown || '');
-  const footnoteStyle = footnoteItems || hasFootnoteRefs
-    ? `\n<style>
-.article-footnote-ref a { text-decoration: none; color: var(--color-accent); font-weight: 600; }
-.article-footnote-list { font-style: normal; }
-.article-footnote-item { display: block; margin: 3px 0; font-style: normal; line-height: 1.7; }
-.article-footnote-back { text-decoration: none; color: var(--color-accent); margin-left: 4px; font-weight: 600; }
-</style>`
-    : '';
+  // 脚注构件的样式（上标引用、页脚条目、返回链接）唯一实现在站点 css/style.css：
+  // 生成的页面只写结构，不再随页注入内联 <style> 副本（工作区硬规则：构件不得页面内联，
+  // 内联副本会随配色与标准演进漂移；组件标准 3.6b 同步记录此约束）
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -241,7 +234,6 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
 <meta name="keywords" content="图书馆,知识,学习,牧羊人">
 <link rel="stylesheet" href="${rootPrefix}css/style.css">
   ${siteHeadExtras(rootPrefix)}
-${footnoteStyle}
 ${data.includeMathJax ? MATHJAX_HEAD : ''}
 </head>
 <body>
