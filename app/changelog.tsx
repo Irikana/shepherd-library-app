@@ -27,8 +27,8 @@ import { SPACING, useTheme, type Palette } from '../src/theme';
 
 /** 时间条单个节点宽度（含间距），用于计算进度线与定位 */
 const ITEM_W = 84;
-/** 时间条内容左内边距 */
-const PAD_L = 14;
+/** 时间条末端留白：避免最后一个节点的标签贴着可滚动区域的右边缘 */
+const PAD_R = 14;
 
 /** 行内文本：支持 `代码` 与 **加粗** 片段 */
 function InlineText({
@@ -65,9 +65,11 @@ function InlineText({
   );
 }
 
-/** 第 i 个节点中心相对时间条内容起点的横向距离 */
+/** 第 i 个节点中心相对时间条内容起点的横向距离
+ *  节点是轨道的行内子元素、游标与进度线是轨道的绝对子元素，两者必须落在同一坐标空间：
+ *  轨道一侧不加任何内边距，游标才能压在节点正中（多加一个左内边距就整体右偏那么多） */
 function nodeCenter(i: number): number {
-  return PAD_L + i * ITEM_W + ITEM_W / 2;
+  return i * ITEM_W + ITEM_W / 2;
 }
 
 /**
@@ -130,6 +132,9 @@ function ChangelogView() {
   /** 时间条可视宽度（用于把当前节点保持可见） */
   const barWidth = useRef(0);
   const activeRef = useRef(0);
+  /** 时间条跳转期间为真：滚动动画落定前不允许反向改写选中项 */
+  const jumpLocked = useRef(false);
+  const jumpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [active, setActive] = useState(0);
   /** 进度线与菱形游标共用的横向位置（px，JS 驱动以便同时动画 width） */
@@ -139,7 +144,7 @@ function ChangelogView() {
   /** 入场淡入上移 */
   const enter = useRef(new Animated.Value(0)).current;
 
-  const contentWidth = useMemo(() => PAD_L * 2 + Math.max(1, count) * ITEM_W, [count]);
+  const contentWidth = useMemo(() => Math.max(1, count) * ITEM_W + PAD_R, [count]);
 
   useEffect(() => {
     // 入场动画走 JS 驱动：时间条内部另有 JS 驱动的游标与进度线，
@@ -157,6 +162,15 @@ function ChangelogView() {
         })
       : nodeCenter(0);
 
+  /** 解除跳转锁：用户自己拖动列表，或动画早已落定 */
+  const releaseJumpLock = useCallback(() => {
+    jumpLocked.current = false;
+    if (jumpTimer.current) {
+      clearTimeout(jumpTimer.current);
+      jumpTimer.current = null;
+    }
+  }, []);
+
   /** 选中某个版本：更新游标 + 弹性反馈；fromBar 为真时同时滚动到对应卡片 */
   const focusIndex = useCallback(
     (i: number, fromBar: boolean) => {
@@ -170,6 +184,12 @@ function ChangelogView() {
         // 混用原生驱动会在点击时抛「Driving the node on both native and JS driver」并白屏
         Animated.spring(ringPop, { toValue: 1, friction: 3.6, tension: 160, useNativeDriver: false }).start();
         const y = cardOffsets.current[i];
+        // 带动画的跳转会连续触发 onScroll，中间位置反推出的版本不是刚点的那个；
+        // 且靠后的版本滚到底也顶不到视口顶部，反推结果会永久把选中改到更新的版本上。
+        // 跳转期间以点击的版本为准，用户接手拖动时立即解锁。
+        jumpLocked.current = true;
+        if (jumpTimer.current) clearTimeout(jumpTimer.current);
+        jumpTimer.current = setTimeout(releaseJumpLock, 700);
         if (typeof y === 'number') listRef.current?.scrollTo({ y: Math.max(0, y - 6), animated: true });
       } else {
         // 由列表滚动带动：让时间条跟着走，保证当前节点可见
@@ -178,13 +198,13 @@ function ChangelogView() {
         barRef.current?.scrollTo({ x: target, animated: true });
       }
     },
-    [count, ringPop, ringX],
+    [count, releaseJumpLock, ringPop, ringX],
   );
 
   /** 纵向滚动时按卡片偏移定位当前版本（列表滚动 → 时间条联动） */
   const onListScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (!count) return;
+      if (!count || jumpLocked.current) return;
       const y = e.nativeEvent.contentOffset.y;
       const offs = cardOffsets.current;
       let idx = 0;
@@ -264,6 +284,7 @@ function ChangelogView() {
         style={s.list}
         contentContainerStyle={s.content}
         onScroll={onListScroll}
+        onScrollBeginDrag={releaseJumpLock}
         scrollEventThrottle={64}
       >
         <Text style={s.sectionTitle}>全部更新日志</Text>
