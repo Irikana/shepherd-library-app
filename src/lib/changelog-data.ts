@@ -1581,5 +1581,85 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "牧羊人图书馆站点升至 **alpha-023**：新增分级提示构件（提示 / 通知 / 警告 × 小弹窗 / 模态弹窗 / 轻提示，带「关闭后今日不再提示」与每日 0 点自动恢复）、顶栏历史导航（返回上一页 / 前进到刚才那一页）、知识馆侧边栏改为主题令牌驱动并可收缩；修复移动端顶栏未展开即撑高、海报新闻日期不居中；《Minesia 第一个公开测试》由测试文章归位为普通文章；Callout 图标位全站改用排版符号 ※ 并取消表情例外（站点已发布文章与 App 插入片段一并跟进）。App 的知识词条模板与这些改动逐字对齐"
       }
     ]
+  },
+  {
+    "key": "0.0.17",
+    "title": "0.0.17（2026-09-19）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.17（2026-09-19）"
+      },
+      {
+        "kind": "section",
+        "text": "修复"
+      },
+      {
+        "kind": "bullet",
+        "text": "**时间条的选中标记整体偏右，压不到版本节点上**：节点中心按「左内边距 + 序号 × 节点宽 + 半格」计算，"
+      },
+      {
+        "kind": "bullet",
+        "text": "**从时间条点选版本跳转后不会选中该版本**：跳转是带动画的滚动，飞行途中列表滚动事件连续触发，"
+      },
+      {
+        "kind": "section",
+        "text": "版本与构建"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号 `0.0.16` → `0.0.17`（`package.json` / `app.json` 两处同步）；第四位构建号仍只由 CI 注入。"
+      },
+      {
+        "kind": "bullet",
+        "text": "按 2026-09-19 起的新发版规则（每批用户可见改动即一次发版），本批提交后随即打 tag `v0.0.17`。"
+      },
+      {
+        "kind": "section",
+        "text": "验证"
+      },
+      {
+        "kind": "bullet",
+        "text": "`npx tsc --noEmit` 通过。"
+      }
+    ]
+  },
+  {
+    "key": "0.0.18",
+    "title": "0.0.18（2026-09-19）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.18（2026-09-19）"
+      },
+      {
+        "kind": "section",
+        "text": "修复"
+      },
+      {
+        "kind": "bullet",
+        "text": "**「全部更新日志」页看不到 0.0.17 的内容**：该页读的是内置数据 `src/lib/changelog-data.ts`，由 `scripts/gen-changelog.js` 从 `changelog/` 目录生成；0.0.17 发版时漏跑了这一步，页面停在 0.0.16，时间条上也缺最新那一格。现已重新生成（收录 27 → 28 个版本），并在发版流程里把「重跑生成脚本」写成必须的一步，避免再次漏掉"
+      },
+      {
+        "kind": "section",
+        "text": "版本与构建"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号 `0.0.17` → `0.0.18`（`package.json` / `app.json` 两处同步），tag `v0.0.18` 触发构建并创建 Release"
+      },
+      {
+        "kind": "bullet",
+        "text": "发版链新增检查项：写完 `changelog/CHANGELOG-{A.B.C}.md` 后必须 `node scripts/gen-changelog.js`，再提交、打 tag、推送 tag"
+      },
+      {
+        "kind": "section",
+        "text": "验证"
+      },
+      {
+        "kind": "bullet",
+        "text": "`npx tsc --noEmit` 通过；生成脚本输出 28 个版本，App 内时间条最左端为 v0.0.18"
+      }
+    ]
   }
 ];
