@@ -39,6 +39,7 @@ import { NewsPublishPanel } from '../src/components/NewsPublishPanel';
 import { PressFX } from '../src/components/PressFX';
 import { HtmlPreview } from '../src/components/HtmlPreview';
 import { buildPreviewHtml, getSiteCss, PREVIEW_BASE_URL } from '../src/lib/site-style';
+import { nowFormatted } from '../src/lib/date-format';
 import { SPACING, useTheme, type Palette } from '../src/theme';
 
 /** 新建文件时允许的根目录（安全白名单，防止写入仓库任意位置） */
@@ -367,15 +368,17 @@ export default function EditorScreen() {
       return;
     }
 
-    // 合并元数据变更到 HTML（如果是文章且元数据有修改）
+    // 合并元数据变更到 HTML（如果是文章）
     let saveContent = content;
     let hiddenChanged = false;
-    if (isArticle && metadataDirty && metadata) {
-      saveContent = updateArticleHtml(content, metadata, useConfigStore.getState().tagColors);
+    if (isArticle && metadata) {
+      const nowTime = nowFormatted();
+      const updatedMeta = { ...metadata, publishDate: nowTime };
+      saveContent = updateArticleHtml(content, updatedMeta, useConfigStore.getState().tagColors);
       // 检测 hidden 是否真的变了（对比原始内容）
       const wasHidden = originalContent.includes('data-article-hidden="true"');
       hiddenChanged = wasHidden !== metadata.hidden;
-      // 同步回 store（让 markSaved 正确记录）
+      // 同步回 store
       setContent(saveContent);
     }
 
@@ -514,7 +517,7 @@ export default function EditorScreen() {
               accessibilityLabel={tabLocked ? '解锁当前页' : '锁定当前页'}
             >
               <Text style={[s.lockText, tabLocked && s.lockTextOn]}>
-                {tabLocked ? '已锁定' : '锁定'}
+                {tabLocked ? '⚿ 已锁定' : '⚿ 锁定'}
               </Text>
             </Pressable>
           )}
@@ -633,7 +636,7 @@ export default function EditorScreen() {
       {/* 底部操作 */}
       <View style={s.footer}>
         <Pressable style={s.backBtn} onPress={handleBack}>
-          <Text style={s.backText}>返回</Text>
+          <Text style={s.backText}>‹ 返回</Text>
         </Pressable>
         <PressFX
           style={[s.saveBtn, (saving || !hasChanges) && s.btnDisabled]}

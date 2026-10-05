@@ -70,12 +70,25 @@ export function EditMetaForm() {
       <View style={s.inputRow}>
         <View style={[s.input, s.inputFlex, s.dateDisplay]}>
           <Text style={metadata.createDate ? s.dateText : s.datePlaceholder}>
-            {metadata.createDate || 'YYYY-MM-DD'}
+            {metadata.createDate || 'YYYY/MM/DD/HH/mm'}
           </Text>
         </View>
         <Pressable style={[s.sideBtn, lockedMeta && s.btnDisabled]} onPress={() => setDatePickerVisible(true)} disabled={lockedMeta}>
           <Text style={s.sideBtnText}>日历</Text>
         </Pressable>
+      </View>
+
+      {/* 发布日期 */}
+      <Text style={s.label}>发布日期</Text>
+      <View style={s.inputRow}>
+        <View style={[s.input, s.inputFlex, s.dateDisplay, { backgroundColor: colors.bgSubtle }]}>
+          <Text style={s.dateText}>
+            {metadata.publishDate || metadata.createDate || 'YYYY/MM/DD/HH/mm'}
+          </Text>
+        </View>
+        <View style={[s.sideBtn, s.btnDisabled]}>
+          <Text style={s.sideBtnText}>自动</Text>
+        </View>
       </View>
 
       {/* 文章性质 */}

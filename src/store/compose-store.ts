@@ -12,18 +12,15 @@
 //    按当前 entryType 现开一个新会话，避免出现「有内容但没有草稿 id 可保存」的状态。
 import { create } from 'zustand';
 import type { ArticleFormData, ArticleType, EntryType, NewsKind } from '../types';
-
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+import { nowFormatted } from '../lib/date-format';
 
 export const defaultForm: ArticleFormData = {
   entryType: 'article',
   title: '',
   titleEn: '',
   author: '薛柯道',
-  createDate: today(),
+  createDate: nowFormatted(),
+  publishDate: nowFormatted(),
   articleType: '信息文章',
   tags: [],
   recordingDuration: '',
@@ -39,9 +36,10 @@ export const defaultForm: ArticleFormData = {
   hidden: false,
 };
 
-/** 空白表单（每次调用重算创建日期，避免跨天沿用模块加载时的日期） */
+/** 空白表单（每次调用重算创建日期与发布日期） */
 export function blankForm(entryType: EntryType): ArticleFormData {
-  return { ...defaultForm, entryType, createDate: today() };
+  const now = nowFormatted();
+  return { ...defaultForm, entryType, createDate: now, publishDate: now };
 }
 
 /** 新草稿 id（时间戳 + 随机后缀） */
@@ -115,7 +113,13 @@ export const useComposeStore = create<ComposeState>((set) => ({
   ...transientState,
 
   setField: (key, value) =>
-    set((state) => ({ form: { ...state.form, [key]: value } })),
+    set((state) => ({
+      form: {
+        ...state.form,
+        [key]: value,
+        publishDate: key === 'publishDate' ? (value as string) : nowFormatted(),
+      },
+    })),
 
   toggleTag: (tag) =>
     set((state) => {

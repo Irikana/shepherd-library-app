@@ -1,9 +1,8 @@
-// 文章 HTML 元数据解析与更新（编辑已有文章时使用）
-// 解析 generateArticleHtml 产出的 HTML 结构，提取元数据；更新时仅替换元数据区段，保留正文 HTML
 import { marked } from 'marked';
 import type { ArticleFormData, ArticleType } from '../types';
 import { ARTICLE_CATEGORIES } from './article-sync';
-import { formatDateCN, renderTags } from '../templates/article';
+import { renderTags } from '../templates/article';
+import { normalizeDateToMinute, formatDateCN, nowFormatted } from './date-format';
 import type { TagColorMap } from './tag-colors';
 
 /** 判断 HTML 是否为 App 生成的文章页（class token 匹配，兼容 class="section-padding page-title-main" 多类名） */
@@ -55,7 +54,11 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
 
   // 创建日期
   const dateMatch = html.match(/创建日期：<\/span>\s*<span class="article-meta-value">([\s\S]*?)<\/span>/);
-  const createDate = dateMatch ? parseDateCN(extractText(dateMatch[1])) : '';
+  const createDate = dateMatch ? normalizeDateToMinute(extractText(dateMatch[1])) : '';
+
+  // 发布日期
+  const pubDateMatch = html.match(/发布日期：<\/span>\s*<span class="article-meta-value">([\s\S]*?)<\/span>/);
+  const publishDate = pubDateMatch ? normalizeDateToMinute(extractText(pubDateMatch[1])) : createDate;
 
   // 文章性质
   const typeMatch = html.match(/<span class="article-type-badge[^"]*">([\s\S]*?)<\/span>/);
@@ -124,6 +127,7 @@ export function parseArticleMetadata(html: string, filePath: string): ArticleFor
     titleEn,
     author,
     createDate,
+    publishDate,
     articleType,
     tags,
     recordingDuration,
@@ -150,7 +154,8 @@ function renderTypeBadge(articleType: string): string {
 
 /** 构建元数据区段 HTML（与 article.ts generateArticleHtml 一致） */
 function buildMetaSection(form: ArticleFormData, tagColors: TagColorMap = {}): string {
-  const dateCN = formatDateCN(form.createDate);
+  const createDateCN = formatDateCN(form.createDate);
+  const publishDateCN = formatDateCN(form.publishDate || form.createDate || nowFormatted());
   const metaItems: string[] = [
     `      <div class="article-meta-item">
           <span class="article-meta-label">作者：</span>
@@ -158,7 +163,11 @@ function buildMetaSection(form: ArticleFormData, tagColors: TagColorMap = {}): s
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">创建日期：</span>
-          <span class="article-meta-value">${dateCN}</span>
+          <span class="article-meta-value">${createDateCN}</span>
+        </div>`,
+    `      <div class="article-meta-item">
+          <span class="article-meta-label">发布日期：</span>
+          <span class="article-meta-value">${publishDateCN}</span>
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">文章性质：</span>

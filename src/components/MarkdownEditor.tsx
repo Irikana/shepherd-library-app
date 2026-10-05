@@ -1,13 +1,8 @@
-// Markdown 正文编辑器（多行输入 + 快捷插入工具栏 + 数学符号面板）
-// 纯受控：value / onChangeText 必填，编辑器不再回退读写任何 store——
-// 撰写页与知识词条页各自绑定自己表单的 bodyMarkdown，避免正文串写（缺陷 A 的第一处根因）
-// 插入交互修复：工具栏按钮用 onPressIn 立即响应（Android 输入法打开时无需先收起键盘），
-// 插入后通过 setNativeProps 恢复光标位置并保持输入框焦点
-// 锁定态（editable=false）：改挂 ReadOnlyText，可滑动浏览但不能编辑
-// （Android 上 editable=false 的输入框连内部滚动一起失效，用户既滑不动也看不了全文）
+// Markdown 正文编辑器（受控多行输入 + 快捷排版工具栏 + 模板选择 + 数学符号面板）
 import React, { useState } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,24 +10,24 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { FONT, SPACING, useTheme, type Palette } from '../theme';
 import { buildSectionScaffold } from '../templates/knowledge-entry';
 import { ReadOnlyText } from './ReadOnlyText';
+import { useTemplatesStore } from '../store/templates-store';
 import type { EntryType } from '../types';
-
-// 滚动修复说明：
-// TextInput multiline + flex:1 自行管理滚动（Android 嵌套 ScrollView 会导致滚动失效）
-// scrollPosition / onScroll 接口保留兼容（父组件传入时不报错），但不再实际追踪
 
 interface InsertAction {
   label: string;
+  display?: string;
   insert: (before: string, selStart: number, selEnd: number) => { text: string; cursor: number };
 }
 
 /** 片段插入：§ 为光标落点，无 § 时光标在片段末尾 */
-function snippetAction(label: string, snippet: string): InsertAction {
+function snippetAction(label: string, snippet: string, display?: string): InsertAction {
   return {
     label,
+    display: display || label,
     insert: (b, s, e) => {
       const caret = snippet.indexOf('§');
       const clean = snippet.replace('§', '');
@@ -60,10 +55,11 @@ const CALLOUT =
 
 /** 站点出版预设：含网站视觉组件（蓝框/灰引/红警/Callout/折叠块） */
 const LIBRARY_ACTIONS: InsertAction[] = [
-  { label: 'H2', insert: (b, s) => ({ text: b.slice(0, s) + '## ' + b.slice(s), cursor: s + 3 }) },
-  { label: 'H3', insert: (b, s) => ({ text: b.slice(0, s) + '### ' + b.slice(s), cursor: s + 4 }) },
+  { label: 'H2', display: 'H2', insert: (b, s) => ({ text: b.slice(0, s) + '## ' + b.slice(s), cursor: s + 3 }) },
+  { label: 'H3', display: 'H3', insert: (b, s) => ({ text: b.slice(0, s) + '### ' + b.slice(s), cursor: s + 4 }) },
   {
     label: '加粗',
+    display: 'B',
     insert: (b, s, e) => {
       const sel = b.slice(s, e) || '加粗';
       const text = b.slice(0, s) + `**${sel}**` + b.slice(e);
@@ -72,6 +68,7 @@ const LIBRARY_ACTIONS: InsertAction[] = [
   },
   {
     label: '斜体',
+    display: 'I',
     insert: (b, s, e) => {
       const sel = b.slice(s, e) || '斜体';
       const text = b.slice(0, s) + `*${sel}*` + b.slice(e);
@@ -80,21 +77,34 @@ const LIBRARY_ACTIONS: InsertAction[] = [
   },
   {
     label: '删除线',
+    display: 'S',
     insert: (b, s, e) => {
       const sel = b.slice(s, e) || '删除';
       const text = b.slice(0, s) + `~~${sel}~~` + b.slice(e);
       return { text, cursor: s + 2 + sel.length };
     },
   },
-  { label: '行内代码', insert: (b, s, e) => {
-    const sel = b.slice(s, e) || 'code';
-    const text = b.slice(0, s) + '`' + sel + '`' + b.slice(e);
-    return { text, cursor: s + 1 + sel.length };
-  } },
-  { label: '链接', insert: (b, s) => ({ text: b.slice(0, s) + '[文字](https://)' + b.slice(s), cursor: s + 9 }) },
-  { label: '图片', insert: (b, s) => ({ text: b.slice(0, s) + '![图片描述](https://)' + b.slice(s), cursor: s + 20 }) },
+  {
+    label: '行内代码',
+    display: '</>',
+    insert: (b, s, e) => {
+      const sel = b.slice(s, e) || 'code';
+      const text = b.slice(0, s) + '`' + sel + '`' + b.slice(e);
+      return { text, cursor: s + 1 + sel.length };
+    },
+  },
+  { label: '代码块', display: '{ }', insert: (b, s) => snippetAction('代码块', CODE_BLOCK, '{ }').insert(b, s, s) },
+  { label: '链接', display: '☍', insert: (b, s) => ({ text: b.slice(0, s) + '[文字](https://)' + b.slice(s), cursor: s + 9 }) },
+  { label: '图片', display: '◩', insert: (b, s) => ({ text: b.slice(0, s) + '![图片描述](https://)' + b.slice(s), cursor: s + 20 }) },
+  { label: '引用', display: '”', insert: (b, s) => ({ text: b.slice(0, s) + '> ' + b.slice(s), cursor: s + 2 }) },
+  { label: '列表', display: '• -', insert: (b, s) => ({ text: b.slice(0, s) + '- ' + b.slice(s), cursor: s + 2 }) },
+  { label: '有序', display: '1.', insert: (b, s) => ({ text: b.slice(0, s) + '1. ' + b.slice(s), cursor: s + 3 }) },
+  { label: '表格', display: '⊞', insert: (b, s) => snippetAction('表格', TABLE, '⊞').insert(b, s, s) },
+  { label: '分割线', display: '—', insert: (b, s) => ({ text: b.slice(0, s) + '\n---\n' + b.slice(s), cursor: s + 5 }) },
+  { label: '换行', display: '↵', insert: (b, s) => ({ text: b.slice(0, s) + '<br>' + b.slice(s), cursor: s + 4 }) },
   {
     label: '蓝框',
+    display: '■ 蓝框',
     insert: (b, s) => {
       const block = '<div class="function-box-blue">\n  §内容\n</div>';
       return snippetAction('蓝框', block).insert(b, s, s);
@@ -102,6 +112,7 @@ const LIBRARY_ACTIONS: InsertAction[] = [
   },
   {
     label: '灰引',
+    display: '■ 灰引',
     insert: (b, s) => {
       const block = '<div class="quote-box-grey">\n  §引用或参考内容\n</div>';
       return snippetAction('灰引', block).insert(b, s, s);
@@ -109,45 +120,48 @@ const LIBRARY_ACTIONS: InsertAction[] = [
   },
   {
     label: '红警',
+    display: '▲ 红警',
     insert: (b, s) => {
       const block = '<div class="notice-box-red">\n  §警告内容（请谨慎使用）\n</div>';
       return snippetAction('红警', block).insert(b, s, s);
     },
   },
-  { label: 'Callout', insert: (b, s) => snippetAction('Callout', CALLOUT).insert(b, s, s) },
+  { label: 'Callout', display: '※ 提示', insert: (b, s) => snippetAction('Callout', CALLOUT, '※ 提示').insert(b, s, s) },
   {
     label: '折叠块',
+    display: '▾ 折叠',
     insert: (b, s) => {
       const block = '<details>\n  <summary>标题</summary>\n  <div>\n    §\n  </div>\n</details>';
       return snippetAction('折叠块', block).insert(b, s, s);
     },
   },
-  { label: '引用', insert: (b, s) => ({ text: b.slice(0, s) + '> ' + b.slice(s), cursor: s + 2 }) },
-  { label: '列表', insert: (b, s) => ({ text: b.slice(0, s) + '- ' + b.slice(s), cursor: s + 2 }) },
-  { label: '有序', insert: (b, s) => ({ text: b.slice(0, s) + '1. ' + b.slice(s), cursor: s + 3 }) },
-  { label: '代码块', insert: (b, s) => snippetAction('代码块', CODE_BLOCK).insert(b, s, s) },
-  { label: '表格', insert: (b, s) => snippetAction('表格', TABLE).insert(b, s, s) },
-  { label: '分割线', insert: (b, s) => ({ text: b.slice(0, s) + '\n---\n' + b.slice(s), cursor: s + 5 }) },
-  { label: '换行', insert: (b, s) => ({ text: b.slice(0, s) + '<br>' + b.slice(s), cursor: s + 4 }) },
-  { label: '行内公式', insert: (b, s, e) => {
-    const sel = b.slice(s, e) || '公式';
-    const text = b.slice(0, s) + `$${sel}$` + b.slice(e);
-    return { text, cursor: s + 1 + sel.length };
-  } },
-  { label: '独立公式', insert: (b, s, e) => {
-    const sel = b.slice(s, e) || '公式';
-    const text = b.slice(0, s) + `$$\n${sel}\n$$` + b.slice(e);
-    return { text, cursor: s + 3 + sel.length };
-  } },
+  {
+    label: '行内公式',
+    display: '$x$',
+    insert: (b, s, e) => {
+      const sel = b.slice(s, e) || '公式';
+      const text = b.slice(0, s) + `$${sel}$` + b.slice(e);
+      return { text, cursor: s + 1 + sel.length };
+    },
+  },
+  {
+    label: '独立公式',
+    display: '$$',
+    insert: (b, s, e) => {
+      const sel = b.slice(s, e) || '公式';
+      const text = b.slice(0, s) + `$$\n${sel}\n$$` + b.slice(e);
+      return { text, cursor: s + 3 + sel.length };
+    },
+  },
 ];
 
-/** 词条「插入分节」：一键补齐缺失的 概述 / 详细说明 / 历史 脚手架（已填写的节不重复插入） */
+/** 词条「插入分节」：补齐缺失的 概述 / 详细说明 / 历史 脚手架 */
 const SECTION_ACTION: InsertAction = {
   label: '插入分节',
+  display: '§ 分节',
   insert: (b, s, e) => {
     const scaffold = buildSectionScaffold(b);
     if (!scaffold) {
-      // 三节都已有内容：退化为插入普通 H2，交给模板按未归类节处理
       return { text: b.slice(0, s) + '## ' + b.slice(s), cursor: s + 3 };
     }
     const head = b.slice(0, e).trimEnd();
@@ -159,13 +173,12 @@ const SECTION_ACTION: InsertAction = {
   },
 };
 
-/** 词条预设用到的动作标签（文章预设的子集：去掉裸 H2，改由「插入分节」提供规范节标题） */
 const KNOWLEDGE_LABELS = new Set([
-  'H3', '加粗', '斜体', '删除线', '行内代码', '链接', '图片', '引用', '列表', '有序',
-  '蓝框', '灰引', '代码块', '表格', '分割线', '换行', '行内公式', '独立公式',
+  'H3', '加粗', '斜体', '删除线', '行内代码', '代码块', '链接', '图片', '引用', '列表', '有序',
+  '蓝框', '灰引', '表格', '分割线', '换行', '行内公式', '独立公式',
 ]);
 
-/** 知识词条预设：分节脚手架 + 常用排版（提示框保留，正文组件与站点视觉一致） */
+/** 知识词条预设 */
 const KNOWLEDGE_ACTIONS: InsertAction[] = [
   SECTION_ACTION,
   ...LIBRARY_ACTIONS.filter((a) => KNOWLEDGE_LABELS.has(a.label)),
@@ -237,44 +250,38 @@ const SYMBOL_GROUPS: { title: string; items: { label: string; insert: string }[]
 ];
 
 export function MarkdownEditor({
-  scrollPosition,
-  onScroll,
   value,
   onChangeText,
   footnotes = [],
   entryType = 'article',
   editable = true,
 }: {
-  /** 恢复滚动位置（切换标签页时传入上次位置，仅首次挂载时应用） */
-  scrollPosition?: number;
-  /** 滚动位置变化回调（用于保存浏览进度） */
-  onScroll?: (y: number) => void;
-  /** 受控正文值（必填：编辑器不读写任何 store） */
   value: string;
-  /** 受控变更回调（必填） */
   onChangeText: (text: string) => void;
-  /** 脚注列表（用于「脚注」按钮自动编号；知识词条不显示脚注按钮） */
   footnotes?: string[];
-  /** 条目类型：决定工具栏预设（默认文章预设；'knowledge' 用分节脚手架预设） */
   entryType?: EntryType;
-  /** 是否可编辑（默认 true；锁定态由外部传入 false —— 锁定时可滑动浏览、不可编辑） */
   editable?: boolean;
+  scrollPosition?: number;
+  onScroll?: (y: number) => void;
 }) {
+  const router = useRouter();
   const isKnowledge = entryType === 'knowledge';
   const { colors } = useTheme();
   const s = createStyles(colors);
   const inputRef = React.useRef<TextInput>(null);
   const selectionRef = React.useRef({ start: 0, end: 0 });
   const [symbolsVisible, setSymbolsVisible] = useState(false);
+  const [templatesVisible, setTemplatesVisible] = useState(false);
+
+  const templates = useTemplatesStore((st) => st.templates);
 
   const text = value;
   const changeText = (t: string) => onChangeText(t);
-  // 锁定状态由外部 editable 决定（撰写页传入 locked.body 的反值）
   const lockedBody = !editable;
   const actions = isKnowledge ? KNOWLEDGE_ACTIONS : LIBRARY_ACTIONS;
-  /** 应用插入结果：更新文本 + 恢复光标（即使输入框短暂失焦也不丢位置） */
-  const applyInsert = (text: string, cursor: number) => {
-    changeText(text);
+
+  const applyInsert = (nextText: string, cursor: number) => {
+    changeText(nextText);
     selectionRef.current = { start: cursor, end: cursor };
     requestAnimationFrame(() => {
       const input = inputRef.current;
@@ -290,7 +297,6 @@ export function MarkdownEditor({
     applyInsert(result, cursor);
   };
 
-  /** 插入符号片段（含 § 光标占位） */
   const insertSnippet = (snippet: string) => {
     const { start, end } = selectionRef.current;
     const caret = snippet.indexOf('§');
@@ -299,7 +305,6 @@ export function MarkdownEditor({
     applyInsert(next, start + (caret >= 0 ? caret : clean.length));
   };
 
-  /** 脚注按钮：自动编号插入 [^n] */
   const insertFootnote = () => {
     const { start, end } = selectionRef.current;
     const body = text;
@@ -317,7 +322,6 @@ export function MarkdownEditor({
   return (
     <View style={s.container}>
       {lockedBody ? (
-        /* 锁定态：整块换成只读浏览视图（可滑动、不可编辑、工具栏不可用） */
         <ReadOnlyText
           text={text}
           mono
@@ -329,29 +333,46 @@ export function MarkdownEditor({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              // 键盘弹出时点击按钮一次即响应（不消费首次触摸），滑动不会误触（onPress 需抬起且未移动）
               keyboardShouldPersistTaps="handled"
             >
+              <Pressable
+                style={[s.toolBtn, s.toolBtnTemplates]}
+                onPress={() => setTemplatesVisible(true)}
+              >
+                <Text style={[s.toolText, s.toolTextAccent]}>≡ 模板</Text>
+              </Pressable>
+
               {actions.map((a) => (
                 <Pressable
                   key={a.label}
                   style={[s.toolBtn, a.label === '插入分节' && s.toolBtnSection]}
                   onPress={() => handleInsert(a)}
+                  accessibilityLabel={a.label}
                 >
-                  <Text style={s.toolText}>{a.label}</Text>
+                  {a.display === 'B' ? (
+                    <Text style={[s.toolText, { fontWeight: '800' }]}>B</Text>
+                  ) : a.display === 'I' ? (
+                    <Text style={[s.toolText, { fontStyle: 'italic', fontWeight: '700' }]}>I</Text>
+                  ) : a.display === 'S' ? (
+                    <Text style={[s.toolText, { textDecorationLine: 'line-through' }]}>S</Text>
+                  ) : (
+                    <Text style={s.toolText}>{a.display || a.label}</Text>
+                  )}
                 </Pressable>
               ))}
+
               {!isKnowledge && (
                 <Pressable style={[s.toolBtn, s.toolBtnFootnote]} onPress={insertFootnote}>
-                  <Text style={s.toolText}>脚注</Text>
+                  <Text style={s.toolText}>[^n] 脚注</Text>
                 </Pressable>
               )}
+
               <Pressable style={[s.toolBtn, s.toolBtnSymbols]} onPress={() => setSymbolsVisible(true)}>
-                <Text style={s.toolText}>数学符号</Text>
+                <Text style={s.toolText}>∑ 符号</Text>
               </Pressable>
             </ScrollView>
           </View>
-          {/* 正文区域：TextInput multiline 自行管理滚动（不嵌套 ScrollView） */}
+
           <TextInput
             ref={inputRef}
             style={s.editor}
@@ -365,8 +386,8 @@ export function MarkdownEditor({
             }}
             placeholder={
               isKnowledge
-                ? '在此撰写词条正文（Markdown）…\n点上方「插入分节」建立 概述 / 详细说明 / 历史 三节，再逐节填写'
-                : '在此撰写正文（Markdown）…\n空行分段，可用上方工具栏插入组件'
+                ? '在此撰写词条正文（Markdown）…\n点上方「§ 分节」建立 概述 / 详细说明 / 历史 三节，再逐节填写'
+                : '在此撰写正文（Markdown）…\n空行分段，可用上方工具栏插入排版组件或点击「≡ 模板」插入常用格式'
             }
             placeholderTextColor={colors.textLight}
             multiline
@@ -378,6 +399,64 @@ export function MarkdownEditor({
           <Text style={s.counter}>{text.length} 字</Text>
         </>
       )}
+
+      {/* 模板选择菜单弹窗 */}
+      <Modal
+        visible={templatesVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setTemplatesVisible(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalPanel}>
+            <View style={s.modalHead}>
+              <Text style={s.modalTitle}>插入模板</Text>
+              <Pressable
+                style={s.manageLink}
+                onPress={() => {
+                  setTemplatesVisible(false);
+                  router.push('/templates');
+                }}
+              >
+                <Text style={s.manageLinkText}>管理模板 ↗</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={s.modalScroll} keyboardShouldPersistTaps="handled">
+              {templates.length === 0 ? (
+                <View style={s.emptyTemplates}>
+                  <Text style={s.emptyTemplatesText}>暂无模板，可点右上角「管理模板」添加</Text>
+                </View>
+              ) : (
+                templates.map((tpl) => (
+                  <Pressable
+                    key={tpl.id}
+                    style={s.templateCard}
+                    onPress={() => {
+                      insertSnippet(tpl.content);
+                      setTemplatesVisible(false);
+                    }}
+                  >
+                    <View style={s.templateCardHead}>
+                      <Text style={s.templateCardTitle}>{tpl.title}</Text>
+                      <Text style={s.templateCardDate}>{tpl.updatedAt}</Text>
+                    </View>
+                    {tpl.description ? (
+                      <Text style={s.templateCardDesc}>{tpl.description}</Text>
+                    ) : null}
+                    <Text style={s.templateCardPreview} numberOfLines={2}>
+                      {tpl.content}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+            <Pressable style={s.closeBtn} onPress={() => setTemplatesVisible(false)}>
+              <Text style={s.closeBtnText}>关闭</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* 数学符号面板 */}
       <Modal
         visible={symbolsVisible}
@@ -385,10 +464,10 @@ export function MarkdownEditor({
         animationType="slide"
         onRequestClose={() => setSymbolsVisible(false)}
       >
-        <View style={s.symbolOverlay}>
-          <View style={s.symbolPanel}>
-            <Text style={s.symbolTitle}>数学符号</Text>
-            <ScrollView style={s.symbolScroll} keyboardShouldPersistTaps="handled">
+        <View style={s.modalOverlay}>
+          <View style={s.modalPanel}>
+            <Text style={s.modalTitle}>数学符号</Text>
+            <ScrollView style={s.modalScroll} keyboardShouldPersistTaps="handled">
               {SYMBOL_GROUPS.map((g) => (
                 <View key={g.title}>
                   <Text style={s.symbolGroupTitle}>{g.title}</Text>
@@ -409,8 +488,8 @@ export function MarkdownEditor({
                 </View>
               ))}
             </ScrollView>
-            <Pressable style={s.symbolClose} onPress={() => setSymbolsVisible(false)}>
-              <Text style={s.symbolCloseText}>关闭</Text>
+            <Pressable style={s.closeBtn} onPress={() => setSymbolsVisible(false)}>
+              <Text style={s.closeBtnText}>关闭</Text>
             </Pressable>
           </View>
         </View>
@@ -433,16 +512,37 @@ const createStyles = (COLORS: Palette) =>
       borderWidth: 1,
       borderColor: COLORS.border,
       paddingVertical: 5,
-      paddingHorizontal: 12,
+      paddingHorizontal: 11,
       marginRight: SPACING.xs,
       backgroundColor: COLORS.bg,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
-    toolBtnFootnote: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
-    toolBtnSection: { borderColor: COLORS.accent, backgroundColor: COLORS.bgMuted },
-    toolBtnSymbols: { borderColor: COLORS.accent, backgroundColor: 'rgba(93,156,204,0.12)' },
-    toolBtnDisabled: { opacity: 0.35 },
-    toolText: { fontSize: 13, color: COLORS.accent, fontWeight: '500' },
-    scrollArea: { flex: 1 },
+    toolBtnTemplates: {
+      borderColor: COLORS.accent,
+      backgroundColor: COLORS.infoBg,
+    },
+    toolBtnFootnote: {
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bg,
+    },
+    toolBtnSection: {
+      borderColor: COLORS.accent,
+      backgroundColor: COLORS.bgMuted,
+    },
+    toolBtnSymbols: {
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bg,
+    },
+    toolText: {
+      fontSize: 13,
+      color: COLORS.text,
+      fontWeight: '500',
+    },
+    toolTextAccent: {
+      color: COLORS.accent,
+      fontWeight: '600',
+    },
     editor: {
       flex: 1,
       padding: SPACING.md,
@@ -460,25 +560,87 @@ const createStyles = (COLORS: Palette) =>
       padding: SPACING.xs,
       backgroundColor: COLORS.bgSubtle,
     },
-    symbolOverlay: {
+    modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.4)',
       justifyContent: 'flex-end',
     },
-    symbolPanel: {
+    modalPanel: {
       backgroundColor: COLORS.bg,
       borderTopWidth: 1,
       borderColor: COLORS.border,
       maxHeight: '75%',
       padding: SPACING.md,
     },
-    symbolTitle: {
+    modalHead: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: SPACING.sm,
+    },
+    modalTitle: {
       fontSize: 16,
       fontWeight: '700',
       color: COLORS.text,
-      marginBottom: SPACING.sm,
     },
-    symbolScroll: { flexGrow: 0 },
+    manageLink: {
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderWidth: 1,
+      borderColor: COLORS.accent,
+      backgroundColor: COLORS.infoBg,
+    },
+    manageLinkText: {
+      fontSize: 12,
+      color: COLORS.accent,
+      fontWeight: '600',
+    },
+    modalScroll: {
+      maxHeight: 380,
+    },
+    templateCard: {
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+      padding: SPACING.sm,
+      marginBottom: SPACING.xs,
+    },
+    templateCardHead: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 2,
+    },
+    templateCardTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: COLORS.text,
+      flex: 1,
+    },
+    templateCardDate: {
+      fontSize: 11,
+      color: COLORS.textLight,
+      marginLeft: SPACING.xs,
+    },
+    templateCardDesc: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginBottom: 4,
+    },
+    templateCardPreview: {
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: 11,
+      color: COLORS.textLight,
+      lineHeight: 16,
+    },
+    emptyTemplates: {
+      padding: SPACING.lg,
+      alignItems: 'center',
+    },
+    emptyTemplatesText: {
+      fontSize: 13,
+      color: COLORS.textLight,
+    },
     symbolGroupTitle: {
       fontSize: 13,
       fontWeight: '600',
@@ -486,7 +648,11 @@ const createStyles = (COLORS: Palette) =>
       marginTop: SPACING.sm,
       marginBottom: SPACING.xs,
     },
-    symbolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+    symbolGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: SPACING.xs,
+    },
     symbolBtn: {
       borderWidth: 1,
       borderColor: COLORS.border,
@@ -494,8 +660,12 @@ const createStyles = (COLORS: Palette) =>
       paddingHorizontal: 10,
       backgroundColor: COLORS.bgSubtle,
     },
-    symbolLabel: { fontSize: 12, color: COLORS.accent, fontFamily: FONT.mono },
-    symbolClose: {
+    symbolLabel: {
+      fontSize: 12,
+      color: COLORS.accent,
+      fontFamily: FONT.mono,
+    },
+    closeBtn: {
       marginTop: SPACING.md,
       borderWidth: 1,
       borderColor: COLORS.border,
@@ -503,5 +673,9 @@ const createStyles = (COLORS: Palette) =>
       alignItems: 'center',
       backgroundColor: COLORS.bgSubtle,
     },
-    symbolCloseText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
+    closeBtnText: {
+      fontSize: 14,
+      color: COLORS.textSecondary,
+      fontWeight: '500',
+    },
   });

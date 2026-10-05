@@ -32,9 +32,12 @@ export function articleFormEdited(form: ArticleFormData): boolean {
   if (form.category && form.category !== defaultForm.category) return true;
   if (form.knowledgeCategory && form.knowledgeCategory !== defaultForm.knowledgeCategory) return true;
   if (form.author && form.author !== defaultForm.author) return true;
-  // 创建日期与「今天」比，而不是与模块加载时算出的 defaultForm 比：
-  // App 常驻跨过后半夜再新建时，两者会差一天，空白稿会被误判为「已编辑」而落进草稿箱
-  if (form.createDate && form.createDate !== todayStr()) return true;
+  // 创建日期与「今天」比（支持 YYYY/MM/DD/HH/mm 与 YYYY-MM-DD 前缀）
+  const todaySlash = () => {
+    const d = new Date();
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  };
+  if (form.createDate && !form.createDate.startsWith(todaySlash()) && !form.createDate.startsWith(todayStr())) return true;
   return false;
 }
 

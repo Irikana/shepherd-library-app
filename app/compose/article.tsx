@@ -1,12 +1,5 @@
-// 统一撰写页（文章 / 新闻 / 知识词条）：元数据表单 + Markdown 编辑器（分段切换）+ 草稿自动保存 + 分页锁定
-// 0.0.7：新闻不再是独立入口——「在新闻板块展示」成为元数据选项，开启后可选文字/海报形态与海报图
-// 词条统一：知识词条不再有自己的撰写页与表单，同由本页承载，差异只体现在 form.entryType 上
-//   - 标题栏文案、元数据区块（MetaForm）、工具栏预设与分节状态（MarkdownEditor）、校验、预览生成分支都按 entryType 走
-//   - /compose/knowledge 路由保留为兼容入口，直接渲染本页组件并固定 entryType='knowledge'
-// 「新建 / 继续编辑」的边界（见 compose-store 顶部注释）：
-//   新建由首页入口动作（startNewArticle / startNewKnowledge）决定；草稿箱条目的 loadDraft 是唯一的「继续编辑」入口；
-//   本页卸载（返回退出撰写流程）时把最新表单落盘为草稿并 endSession()，会话 draftId 因此不会被下一次进入沿用；
-//   从预览页 router.back() 回到本页不触发卸载（页面仍在栈里），draftId 与表单原样保留。
+// 统一撰写页（文章 / 新闻 / 知识词条）：元数据表单 + Markdown 编辑器 + 草稿自动保存 + 分页锁定
+// 差异由 form.entryType 区分，发布前进行各类型特有的结构校验与预览生成。
 import React, { useEffect } from 'react';
 import { Alert, Image, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
@@ -346,7 +339,7 @@ export function ComposeScreen({ entryType }: { entryType?: EntryType }) {
           accessibilityLabel={locked[tab] ? '解锁当前页' : '锁定当前页'}
         >
           <Text style={[s.lockText, locked[tab] && s.lockTextOn]}>
-            {locked[tab] ? '已锁定' : '锁定'}
+            {locked[tab] ? '⚿ 已锁定' : '⚿ 锁定'}
           </Text>
         </Pressable>
       </View>

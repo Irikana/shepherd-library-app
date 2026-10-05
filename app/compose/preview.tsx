@@ -24,6 +24,8 @@ import { getFile, putFile } from '../../src/lib/github-client';
 import { buildPreviewHtml, getSiteCss, PREVIEW_BASE_URL } from '../../src/lib/site-style';
 import { validateArticleHtml, validateKnowledgeHtml } from '../../src/templates/validators';
 import { KNOWLEDGE_CATEGORIES } from '../../src/templates/knowledge-entry';
+import { generateArticleHtml } from '../../src/templates/article';
+import { nowFormatted } from '../../src/lib/date-format';
 import { publishKnowledgeEntry } from '../../src/lib/knowledge-sync';
 import {
   buildSearchKeywords,
@@ -48,6 +50,7 @@ export function PreviewScreen() {
     publishBusy,
     setUploadStatus,
     setPublishBusy,
+    setField,
     reset,
   } = useComposeStore();
   const categories = useConfigStore((s) => s.categories);
@@ -150,8 +153,17 @@ export function PreviewScreen() {
       steps.push(`海报已上传：${posterPath}`);
     }
 
-    // 2. 上传文章
-    await putFile(filePath, generatedHtml, {
+    // 2. 自动获取上传时的时间作为最终真正的发布时间，并重新生成最终发布 HTML
+    const uploadTime = nowFormatted();
+    setField('publishDate', uploadTime);
+    const finalHtml = generateArticleHtml(
+      { ...form, publishDate: uploadTime },
+      category.dir,
+      useConfigStore.getState().tagColors,
+    );
+
+    // 3. 上传文章
+    await putFile(filePath, finalHtml, {
       message: `上传文章：${title}（移动端 App）`,
     });
     setUploadStatus('done', undefined, filePath);
@@ -280,7 +292,7 @@ export function PreviewScreen() {
       const newsSteps = await syncNewsSections({
         title,
         titleEn,
-        date: form.createDate,
+        date: uploadTime,
         kind: newsKind,
         posterPath: posterPath ?? undefined,
         categoryDir: category.dir,
@@ -410,7 +422,7 @@ export function PreviewScreen() {
       {/* 底部操作 */}
       <View style={s.footer}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
-          <Text style={s.backText}>返回修改</Text>
+          <Text style={s.backText}>‹ 返回修改</Text>
         </Pressable>
         <Pressable
           style={[s.uploadBtn, (uploading || publishBusy) && s.btnDisabled]}

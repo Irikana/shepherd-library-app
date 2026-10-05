@@ -10,10 +10,11 @@ import {
   View,
 } from 'react-native';
 import { SPACING, useTheme, type Palette } from '../theme';
+import { parseDateComponents } from '../lib/date-format';
 
 interface DatePickerModalProps {
   visible: boolean;
-  /** 当前值，格式 YYYY-MM-DD（可为空或任意字符串） */
+  /** 当前值，格式 YYYY/MM/DD/HH/mm（可为空或任意字符串） */
   value: string;
   onConfirm: (date: string) => void;
   onCancel: () => void;
@@ -23,18 +24,6 @@ const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 
 type Unit = 'year' | 'month';
 
-/** 解析 YYYY-MM-DD，失败返回 null（含严格的天数校验） */
-function parseDate(str: string): { y: number; m: number; d: number } | null {
-  const m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!m) return null;
-  const y = parseInt(m[1], 10);
-  const mo = parseInt(m[2], 10);
-  const d = parseInt(m[3], 10);
-  if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth(y, mo)) return null;
-  return { y, m: mo, d };
-}
-
-/** 某年某月天数 */
 function daysInMonth(y: number, m: number): number {
   return new Date(y, m, 0).getDate();
 }
@@ -46,11 +35,15 @@ function pad2(n: number): string {
 export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePickerModalProps) {
   const { colors } = useTheme();
   const s = createStyles(colors);
-  const initial = parseDate(value);
   const now = new Date();
-  const [viewYear, setViewYear] = useState(initial?.y ?? now.getFullYear());
-  const [viewMonth, setViewMonth] = useState(initial?.m ?? now.getMonth() + 1);
-  const [selected, setSelected] = useState(initial);
+  const parsed = parseDateComponents(value);
+  const [viewYear, setViewYear] = useState(parsed?.year ?? now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(parsed?.month ?? now.getMonth() + 1);
+  const [selected, setSelected] = useState<{ y: number; m: number; d: number } | null>(
+    parsed ? { y: parsed.year, m: parsed.month, d: parsed.day } : null,
+  );
+  const [hour, setHour] = useState(parsed?.hour ?? now.getHours());
+  const [minute, setMinute] = useState(parsed?.minute ?? now.getMinutes());
   const [unit, setUnit] = useState<Unit>('month');
   const [customMode, setCustomMode] = useState(false);
   const [customText, setCustomText] = useState(value);
@@ -58,16 +51,18 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
   // 打开弹窗时同步当前值
   React.useEffect(() => {
     if (visible) {
-      const cur = parseDate(value);
-      setViewYear(cur?.y ?? now.getFullYear());
-      setViewMonth(cur?.m ?? now.getMonth() + 1);
-      setSelected(cur);
+      const cur = parseDateComponents(value);
+      const n = new Date();
+      setViewYear(cur?.year ?? n.getFullYear());
+      setViewMonth(cur?.month ?? n.getMonth() + 1);
+      setSelected(cur ? { y: cur.year, m: cur.month, d: cur.day } : { y: n.getFullYear(), m: n.getMonth() + 1, d: n.getDate() });
+      setHour(cur?.hour ?? n.getHours());
+      setMinute(cur?.minute ?? n.getMinutes());
       setCustomText(value);
       setCustomMode(false);
       setUnit('month');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, value]);
 
   /** 月历格子：当月日期 + 前后月补位（周一开头） */
   const cells = useMemo(() => {
@@ -113,7 +108,7 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
       return;
     }
     if (selected) {
-      onConfirm(`${selected.y}-${pad2(selected.m)}-${pad2(selected.d)}`);
+      onConfirm(`${selected.y}/${pad2(selected.m)}/${pad2(selected.d)}/${pad2(hour)}/${pad2(minute)}`);
     }
   };
 
@@ -123,16 +118,16 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
         <View style={s.panel}>
           {customMode ? (
             <>
-              <Text style={s.title}>自定义日期</Text>
+              <Text style={s.title}>自定义时间</Text>
               <TextInput
                 style={s.customInput}
                 value={customText}
                 onChangeText={setCustomText}
-                placeholder="如 2026年5月20日 / 2026-05-20"
+                placeholder="如 2026/10/05/18/34"
                 placeholderTextColor={colors.textLight}
                 autoFocus
               />
-              <Text style={s.hint}>可输入任意字符串，将原样写入创建日期</Text>
+              <Text style={s.hint}>格式：YYYY/MM/DD/HH/mm（精确到分钟）</Text>
             </>
           ) : (
             <>
@@ -195,6 +190,29 @@ export function DatePickerModal({ visible, value, onConfirm, onCancel }: DatePic
                     </Pressable>
                   );
                 })}
+              </View>
+
+              {/* 时间微调（时:分） */}
+              <View style={s.timeRow}>
+                <Text style={s.timeLabel}>时间：</Text>
+                <View style={s.timeBox}>
+                  <Pressable style={s.timeBtn} onPress={() => setHour((h) => (h > 0 ? h - 1 : 23))}>
+                    <Text style={s.timeBtnText}>‹</Text>
+                  </Pressable>
+                  <Text style={s.timeText}>{pad2(hour)}时</Text>
+                  <Pressable style={s.timeBtn} onPress={() => setHour((h) => (h < 23 ? h + 1 : 0))}>
+                    <Text style={s.timeBtnText}>›</Text>
+                  </Pressable>
+                </View>
+                <View style={s.timeBox}>
+                  <Pressable style={s.timeBtn} onPress={() => setMinute((m) => (m > 0 ? m - 1 : 59))}>
+                    <Text style={s.timeBtnText}>‹</Text>
+                  </Pressable>
+                  <Text style={s.timeText}>{pad2(minute)}分</Text>
+                  <Pressable style={s.timeBtn} onPress={() => setMinute((m) => (m < 59 ? m + 1 : 0))}>
+                    <Text style={s.timeBtnText}>›</Text>
+                  </Pressable>
+                </View>
               </View>
             </>
           )}
@@ -298,6 +316,30 @@ const createStyles = (COLORS: Palette) =>
       backgroundColor: COLORS.bg,
     },
     hint: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.xs, marginBottom: SPACING.sm },
+    timeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: SPACING.sm,
+      paddingTop: SPACING.sm,
+      borderTopWidth: 1,
+      borderColor: COLORS.border,
+      gap: SPACING.sm,
+    },
+    timeLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
+    timeBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      backgroundColor: COLORS.bgSubtle,
+    },
+    timeBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    timeBtnText: { fontSize: 16, color: COLORS.text, fontWeight: 'bold' },
+    timeText: { fontSize: 13, color: COLORS.text, minWidth: 38, textAlign: 'center' },
     footer: {
       flexDirection: 'row',
       marginTop: SPACING.md,

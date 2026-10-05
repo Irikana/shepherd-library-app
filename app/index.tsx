@@ -17,11 +17,11 @@ import LogoImage from '../src/assets/shephrdsLibraryWrite.png';
 const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';
 
 /** 入场动画：仅前 8 个条目参与，fade in + 12px 上移，每项错峰 40ms，单段时长 240ms */
-const ENTER_MAX = 8;
+const ENTER_MAX = 9;
 const ENTER_STAGGER_MS = 40;
 const ENTER_DURATION_MS = 240;
 const ENTER_TRANSLATE_Y = 12;
-/** 第 9 项及以后复用：进度恒为 1（无动画），保持渲染路径一致 */
+/** 超过入场动画条目上限后复用：进度恒为 1，保持渲染路径一致 */
 const ENTER_DONE = new Animated.Value(1);
 
 interface FeatureItem {
@@ -30,7 +30,6 @@ interface FeatureItem {
   href?: string;
   enabled: boolean;
   badge?: string;
-  /** 撰写入口的条目类型：按下时先起对应类型的新会话（= 新建），再进统一撰写页；带按压反馈 */
   entryType?: EntryType;
 }
 
@@ -60,7 +59,6 @@ export default function HomeScreen() {
 
   const draftCount = useDraftsStore((st) => st.drafts.length);
 
-  // 入场动画：功能入口列表为本地静态数据，首帧渲染完成即视为加载完成，开始错峰入场
   const enterValues = useMemo(
     () => Array.from({ length: ENTER_MAX }, () => new Animated.Value(0)),
     [],
@@ -108,6 +106,12 @@ export default function HomeScreen() {
       href: '/compose/article',
       enabled: true,
       entryType: 'knowledge',
+    },
+    {
+      title: '模板管理',
+      desc: '正文习惯格式与自定义模板管理，支持增删改查及一键插入编辑器',
+      href: '/templates',
+      enabled: true,
     },
     {
       title: '草稿箱',

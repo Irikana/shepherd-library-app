@@ -1661,5 +1661,99 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "`npx tsc --noEmit` 通过；生成脚本输出 28 个版本，App 内时间条最左端为 v0.0.18"
       }
     ]
+  },
+  {
+    "key": "0.0.19",
+    "title": "0.0.19（2026-10-05）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.19（2026-10-05）"
+      },
+      {
+        "kind": "section",
+        "text": "新增"
+      },
+      {
+        "kind": "bullet",
+        "text": "**文章「发布日期」元数据**："
+      },
+      {
+        "kind": "bullet",
+        "text": "与「创建日期」同级并列；创建日期代表开始起草的时间，发布日期代表最终上传到图书馆的时间。"
+      },
+      {
+        "kind": "bullet",
+        "text": "元数据表单（`MetaForm`）中「发布日期」为只读展示，每次编辑自动刷新最后编辑时间戳；点击「上传到仓库 / 发布知识词条」时，自动抓取上传发生瞬间的当前时间作为真正的最终发布日期，并自动重构 HTML 提交至 GitHub。"
+      },
+      {
+        "kind": "bullet",
+        "text": "文章 HTML 模板（`article.ts`）同步渲染 `<span class=\"article-meta-label\">发布日期：</span>`。"
+      },
+      {
+        "kind": "bullet",
+        "text": "**全局时间分钟级精度**："
+      },
+      {
+        "kind": "bullet",
+        "text": "元数据区及草稿的时间格式全面提升至分钟级精度（`YYYY/MM/DD/HH/mm`）。"
+      },
+      {
+        "kind": "bullet",
+        "text": "日期选择弹窗（`DatePickerModal`）支持通过小时/分钟调节微调具体时间。"
+      },
+      {
+        "kind": "bullet",
+        "text": "**正文编辑模板功能与独立管理页**："
+      },
+      {
+        "kind": "bullet",
+        "text": "新增首页功能入口「模板管理」（`/templates`），支持自定义习惯格式与排版模板，提供模板创建、编辑、删除与内置预设重置功能。"
+      },
+      {
+        "kind": "bullet",
+        "text": "Markdown 编辑器（`MarkdownEditor`）工具栏新增「≡ 模板」菜单，点击弹出模板列表，支持一键将模板内容插入至光标处（通过 `§` 符号定位光标位置），并提供跳转至管理页面的快捷链接。"
+      },
+      {
+        "kind": "section",
+        "text": "优化与调整"
+      },
+      {
+        "kind": "bullet",
+        "text": "**编辑器交互构件图形化**："
+      },
+      {
+        "kind": "bullet",
+        "text": "正文排版工具栏的常用文字操作按钮全面替换为国际通用图形/排版符号（`B`、`I`、`S`、`</>`、`{ }`、`”`、`• -`、`1.`、`⊞`、`—`、`↵`、`☍`、`◩`、`§ 分节`、`[^n] 脚注`、`∑ 符号`）。"
+      },
+      {
+        "kind": "bullet",
+        "text": "页面锁定开关增加 `⚿` 状态图标指示，底部返回按钮增加 `‹` 符号。"
+      },
+      {
+        "kind": "bullet",
+        "text": "文章页模板浮动按钮「回到顶部」和「导航枢纽」全面替换为矢量 SVG 图标。"
+      },
+      {
+        "kind": "bullet",
+        "text": "**清理冗余注释**："
+      },
+      {
+        "kind": "bullet",
+        "text": "清理 UI 组件与视图代码中的冗余 AI 注释，保持代码架构清晰。"
+      },
+      {
+        "kind": "section",
+        "text": "版本与构建"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号 `0.0.18` → `0.0.19`（`package.json` / `app.json` / `CHANGELOG-0.0.19.md` 三处同步），执行 `node scripts/gen-changelog.js` 重构 App 内置更新日志数据。"
+      },
+      {
+        "kind": "bullet",
+        "text": "tag `v0.0.19`。"
+      }
+    ]
   }
 ];

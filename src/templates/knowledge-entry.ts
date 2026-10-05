@@ -537,8 +537,8 @@ ${graphNodes}
   </footer>
 </aside>
 
-<button title="回到顶部" class="float-button back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
-  回到<br>顶部
+<button title="回到顶部" aria-label="回到顶部" class="float-button back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
 </button>
 
 <script src="${rootPrefix}js/library-dynamic.js"></script>

@@ -5,13 +5,9 @@ import { marked } from 'marked';
 import type { ArticleFormData } from '../types';
 import { tagInlineStyleCss, type TagColorMap } from '../lib/tag-colors';
 import { siteHeadExtras } from './site-assets';
+import { formatDateCN, nowFormatted } from '../lib/date-format';
 
-/** 将 YYYY-MM-DD 格式化为 YYYY年M月D日 */
-export function formatDateCN(dateStr: string): string {
-  const m = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!m) return dateStr;
-  return `${m[1]}年${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日`;
-}
+export { formatDateCN };
 
 /** HTML 转义（脚注内容） */
 function escapeHtml(str: string): string {
@@ -122,7 +118,8 @@ MathJax = {
  * @returns 完整 HTML 字符串（可直接 PUT 到 library/{categoryDir}/{标题}.html）
  */
 export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper', tagColors: TagColorMap = {}): string {
-  const dateCN = formatDateCN(data.createDate);
+  const createDateCN = formatDateCN(data.createDate);
+  const publishDateCN = formatDateCN(data.publishDate || data.createDate || nowFormatted());
   const titleSafe = escapeHtml(data.title);
 
   // 相对路径前缀：
@@ -161,7 +158,11 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">创建日期：</span>
-          <span class="article-meta-value">${dateCN}</span>
+          <span class="article-meta-value">${createDateCN}</span>
+        </div>`,
+    `      <div class="article-meta-item">
+          <span class="article-meta-label">发布日期：</span>
+          <span class="article-meta-value">${publishDateCN}</span>
         </div>`,
     `      <div class="article-meta-item">
           <span class="article-meta-label">文章性质：</span>
@@ -296,12 +297,12 @@ ${metaItems.join('\n')}
   </div>
 </div>
 
-<button title="回到顶部" class="float-button back-to-top" onclick="scrollToTop()">
-  回到<br>顶部
+<button title="回到顶部" aria-label="回到顶部" class="float-button back-to-top" onclick="scrollToTop()">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
 </button>
 
-<button title="导航枢纽" class="float-button nav-hub" onclick="openNavigator()">
-  导航<br>枢纽
+<button title="导航枢纽" aria-label="导航枢纽" class="float-button nav-hub" onclick="openNavigator()">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
 </button>
 
 ${ARTICLE_SCRIPT(data.title, rootPrefix)}

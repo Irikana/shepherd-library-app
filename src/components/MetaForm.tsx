@@ -180,7 +180,7 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
       <View style={s.inputRow}>
         <View style={[s.input, s.inputFlex, s.dateDisplay]}>
           <Text style={form.createDate ? s.dateText : s.datePlaceholder}>
-            {form.createDate || 'YYYY-MM-DD'}
+            {form.createDate || 'YYYY/MM/DD/HH/mm'}
           </Text>
         </View>
         <Pressable
@@ -191,7 +191,21 @@ export function MetaForm({ extra, scrollPosition, onScroll }: MetaFormProps) {
           <Text style={s.sideBtnText}>日历</Text>
         </Pressable>
       </View>
-      <Text style={s.hint}>点击「日历」从月历中精确选日期，或点击「自定义」手动输入字符串</Text>
+      <Text style={s.hint}>撰写开始时间（精确到分钟）</Text>
+
+      {/* 发布日期 */}
+      <Text style={s.label}>发布日期</Text>
+      <View style={s.inputRow}>
+        <View style={[s.input, s.inputFlex, s.dateDisplay, { backgroundColor: colors.bgSubtle }]}>
+          <Text style={s.dateText}>
+            {form.publishDate || form.createDate || 'YYYY/MM/DD/HH/mm'}
+          </Text>
+        </View>
+        <View style={[s.sideBtn, s.btnDisabled]}>
+          <Text style={s.sideBtnText}>自动</Text>
+        </View>
+      </View>
+      <Text style={s.hint}>自动获取最后编辑时间；点击上传后自动获取最终发布时间</Text>
 
       {/* 文章专属信息块（entryType==='article'）：性质 / 分类 / 新闻 / 标签 / 补充说明 / 脚注 */}
       {!isKnowledge && (

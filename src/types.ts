@@ -41,7 +41,8 @@ export interface ArticleFormData {
   /** 英文标题：作为文件名使用（兼容性更好） */
   titleEn: string;
   author: string;
-  createDate: string; // YYYY-MM-DD
+  createDate: string; // YYYY/MM/DD/HH/mm
+  publishDate?: string; // YYYY/MM/DD/HH/mm（与创建日期同级，自动获取最后编辑时间，上传时记录最终时间）
   articleType: ArticleType;
   /** 标签（内置 + 自定义；「无」为特殊占位，选择后清空其他） */
   tags: string[];
