@@ -292,7 +292,8 @@ export function PreviewScreen() {
       const newsSteps = await syncNewsSections({
         title,
         titleEn,
-        date: uploadTime,
+        date: form.createDate,
+        publishDate: uploadTime,
         kind: newsKind,
         posterPath: posterPath ?? undefined,
         categoryDir: category.dir,

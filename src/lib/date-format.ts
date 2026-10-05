@@ -85,3 +85,15 @@ export function formatDateCN(dateStr: string): string {
   const timeSuffix = c.hour || c.minute ? ` ${pad(c.hour)}:${pad(c.minute)}` : '';
   return `${c.year}年${c.month}月${c.day}日${timeSuffix}`;
 }
+
+/** 将日期时间字符串转为毫秒时间戳（用于排序；解析失败或空值返回 0） */
+export function dateToTimestamp(str?: string): number {
+  if (!str) return 0;
+  const c = parseDateComponents(str.trim());
+  if (!c) {
+    const t = new Date(str).getTime();
+    return isNaN(t) ? 0 : t;
+  }
+  return new Date(c.year, c.month - 1, c.day, c.hour, c.minute).getTime();
+}
+

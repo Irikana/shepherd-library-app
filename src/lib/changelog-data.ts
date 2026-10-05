@@ -1755,5 +1755,63 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "tag `v0.0.19`。"
       }
     ]
+  },
+  {
+    "key": "0.0.20",
+    "title": "0.0.20（2026-10-05）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.20（2026-10-05）"
+      },
+      {
+        "kind": "section",
+        "text": "优化与调整"
+      },
+      {
+        "kind": "bullet",
+        "text": "**新闻卡片生成与多时间字段支持**："
+      },
+      {
+        "kind": "bullet",
+        "text": "`news-card.ts` 中的 `TextCardData` 与 `PosterData` 支持 `publishDate` 与 `date`（创建时间）双时间字段；卡片生成时附加 `data-publish-date` 属性，展示文案优先显示发布时间。"
+      },
+      {
+        "kind": "bullet",
+        "text": "`insertTextCard` 排序算法升级为精确时间戳数值比较，优先以 `publishDate` 降序排列；若无 `publishDate` 则平滑降级至以创建时间为准。"
+      },
+      {
+        "kind": "bullet",
+        "text": "`news-list-item.ts` 生成 news.html 列表项时同步输出 `data-publish-date`，展示日期支持发布时间与分钟级格式。"
+      },
+      {
+        "kind": "bullet",
+        "text": "**发布与同步流程联动**："
+      },
+      {
+        "kind": "bullet",
+        "text": "`syncNewsSections` 与 `NewsSyncOptions` 贯通 `publishDate` 传递，发布新闻时自动以文章的真实发布时刻参与排序和插入。"
+      },
+      {
+        "kind": "bullet",
+        "text": "`editor.tsx` 与 `compose/preview.tsx` 在触发新闻板块同步时，均正确传入 `publishDate` 与 `date`（创建时间），确保新发布的新闻和更新的文章均遵循最新排序规则。"
+      },
+      {
+        "kind": "bullet",
+        "text": "`NewsPublishPanel.tsx` 增加 `publishDate` 参数接收与传递。"
+      },
+      {
+        "kind": "section",
+        "text": "版本与构建"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号 `0.0.19` → `0.0.20`（`package.json` / `app.json` / `CHANGELOG-0.0.20.md` 三处同步），执行 `node scripts/gen-changelog.js` 重新生成 App 内置更新日志数据。"
+      },
+      {
+        "kind": "bullet",
+        "text": "tag `v0.0.20`。"
+      }
+    ]
   }
 ];

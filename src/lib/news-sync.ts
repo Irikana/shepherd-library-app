@@ -9,7 +9,8 @@ import type { NewsKind } from '../types';
 export interface NewsSyncOptions {
   title: string;
   titleEn: string;
-  date: string; // YYYY-MM-DD
+  date: string; // 创建时间或兼容日期
+  publishDate?: string; // 发布时间（若有，优先按发布时间排序，无则以创建时间为准）
   kind: NewsKind;
   posterPath?: string; // image/poster/xxx.png（海报新闻时）
   /** 文章分类目录（相对 library/ 如 paper、works），用于生成正确链接 */
@@ -23,7 +24,7 @@ export interface NewsSyncOptions {
  */
 export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]> {
   const steps: string[] = [];
-  const { title, titleEn, date, kind, posterPath, categoryDir = 'paper' } = opts;
+  const { title, titleEn, date, publishDate, kind, posterPath, categoryDir = 'paper' } = opts;
   const href = `./library/${categoryDir}/${titleEn}.html`;
   const enHref = `../library/${categoryDir}/${titleEn}.html`;
   const why = (e: unknown) => (e as Error).message || String(e);
@@ -35,7 +36,7 @@ export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]>
   // 1. 主页新闻区（中文）
   try {
     const { content, sha } = await getFile('index.html');
-    const card = { title, date, href };
+    const card = { title, date, publishDate, href };
     const updated =
       kind === 'poster' && posterPath
         ? replacePosterAndDemote(content, {
@@ -57,7 +58,7 @@ export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]>
   // 2. news.html 列表
   try {
     const { content, sha } = await getFile('news.html');
-    const updated = insertNewsListItem(content, { title, date, href });
+    const updated = insertNewsListItem(content, { title, date, publishDate, href });
     if (updated !== content) {
       await putFile('news.html', updated, { sha, message: `新闻同步：${title}（移动端 App）` });
       steps.push('news.html 已更新');
@@ -71,7 +72,7 @@ export async function syncNewsSections(opts: NewsSyncOptions): Promise<string[]>
   // 3. 英文主页（卡片标题用英文标题）
   try {
     const { content, sha } = await getFile('en/index.html');
-    const enCard = { title: titleEn, date, href: enHref };
+    const enCard = { title: titleEn, date, publishDate, href: enHref };
     const updated =
       kind === 'poster' && posterPath
         ? replacePosterAndDemote(content, {

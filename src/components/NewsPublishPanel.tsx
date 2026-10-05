@@ -26,8 +26,10 @@ interface NewsPublishPanelProps {
   title: string;
   /** 英文标题（文件名，不含扩展名） */
   titleEn: string;
-  /** 发布日期 YYYY-MM-DD */
+  /** 创建日期（兼容日期） */
   date: string;
+  /** 发布日期（若有，优先按发布时间排序，无则以创建时间为准） */
+  publishDate?: string;
   /** 文章分类目录（相对 library/，如 paper） */
   categoryDir: string;
   /** 同步结果回调：inNews=true 表示当前已在新闻板块（用于联动「新闻」标签） */
@@ -42,6 +44,7 @@ export function NewsPublishPanel({
   title,
   titleEn,
   date,
+  publishDate,
   categoryDir,
   onResult,
 }: NewsPublishPanelProps) {
@@ -56,7 +59,7 @@ export function NewsPublishPanel({
   const [report, setReport] = useState<string[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const opts = { title, titleEn, date, kind, categoryDir };
+  const opts = { title, titleEn, date, publishDate, kind, categoryDir };
 
   const refresh = useCallback(async () => {
     setChecking(true);

@@ -3,15 +3,18 @@ import { formatDateCN } from './article';
 
 export interface NewsListItemData {
   title: string;
-  date: string; // YYYY-MM-DD
+  date: string; // 创建时间或兼容日期
+  publishDate?: string; // 发布时间（若有）
   href: string;
 }
 
 /** 生成 news.html 列表项片段 */
 export function generateNewsListItem(d: NewsListItemData): string {
-  return `<a href="${d.href}" target="_blank" class="news-list-item-text-only">
+  const publishAttr = d.publishDate ? ` data-publish-date="${d.publishDate}"` : '';
+  const displayDate = d.publishDate || d.date;
+  return `<a href="${d.href}" target="_blank" class="news-list-item-text-only" data-date="${d.date}"${publishAttr}>
                 <h3 class="news-list-item-title">${d.title}</h3>
-                <p class="news-list-item-date">${formatDateCN(d.date)}</p>
+                <p class="news-list-item-date">${formatDateCN(displayDate)}</p>
                 <p class="news-list-item-hint">点击此处了解更多</p>
               </a>`;
 }
@@ -22,7 +25,7 @@ export function generateNewsListItem(d: NewsListItemData): string {
  */
 export function insertNewsListItem(newsHtml: string, item: NewsListItemData): string {
   // 定位第一个现有列表项，在其前插入；若无则报错
-  const anchor = /(\s*)(<a href="[^"]*" target="_blank" class="news-list-item-text-only">)/;
+  const anchor = /(\s*)(<a\b[^>]*class="news-list-item-text-only"[^>]*>)/;
   const match = newsHtml.match(anchor);
   const fragment = generateNewsListItem(item);
   if (match) {
@@ -31,3 +34,4 @@ export function insertNewsListItem(newsHtml: string, item: NewsListItemData): st
   }
   throw new Error('未找到 news.html 列表项锚点，无法插入');
 }
+

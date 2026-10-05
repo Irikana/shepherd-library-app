@@ -189,6 +189,7 @@ async function syncVisibility(
           title: metadata.title,
           titleEn,
           date: metadata.createDate,
+          publishDate: metadata.publishDate,
           kind: 'text',
           categoryDir: catDir,
         });
@@ -655,6 +656,7 @@ export default function EditorScreen() {
           title={metadata?.title || pageTitle || name || newsTarget.titleEn}
           titleEn={newsTarget.titleEn}
           date={metadata?.createDate || todayISO()}
+          publishDate={metadata?.publishDate}
           categoryDir={newsTarget.categoryDir}
         />
       )}
