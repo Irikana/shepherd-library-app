@@ -130,24 +130,34 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
   const libPrefix = '../'.repeat(depth); // paper → ../，misc/experimental → ../../
 
   // 脚注引用：将正文中的 [^n] 替换为上标可点击引用（链接到页脚解释处）
-  // 1) 先保护代码块/行内代码，避免其中的字面 [n] 被误替换
-  // 2) 编号超出脚注列表范围的引用保留原文（避免悬空锚点）
+  // 1) 规范化提示框等自定义 div，确保其前后具有空行以便 marked 能正确解析内部的 Markdown 表格与列表
+  let normalized = (data.bodyMarkdown || '')
+    .replace(/(<div\s+class="[^"]*">)\n(?!\n)/gi, '$1\n\n')
+    .replace(/(?<!\n)\n(<\/div>)/gi, '\n\n$1');
+
+  // 2) 保护代码块/行内代码/公式块，避免其中的字面 [n] 或符号被误替换与破坏
+  // 3) 编号超出脚注列表范围的引用保留原文（避免悬空锚点）
   const codeSpans: string[] = [];
-  const protectedMd = (data.bodyMarkdown || '').replace(
-    /(```[\s\S]*?```|`[^`\n]*`)/g,
+  const protectedMd = normalized.replace(
+    /(```[\s\S]*?```|`[^`\n]*`|\$\$[\s\S]*?\$\$|\$[^\$\n]+\$)/g,
     (m) => {
       codeSpans.push(m);
       return `\u0000${codeSpans.length - 1}\u0000`;
     },
   );
+
+  // 4) 保护普通数字相乘算式中的 *（如 30*4 自动转义为 30\*4，避免被 Markdown 误识别为斜体 <em>）
+  const mathProtected = protectedMd.replace(/(\d)\*(\d)/g, '$1\\*$2');
+
   const footnoteCount = data.footnotes?.length ?? 0;
-  const bodyWithFootnotes = protectedMd
+  const bodyWithFootnotes = mathProtected
     .replace(/\[\^(\d+)\]/g, (match, n: string) => {
       const idx = parseInt(n, 10);
       if (idx < 1 || idx > footnoteCount) return match;
       return `<sup class="article-footnote-ref" id="article-fnref-${n}"><a href="#article-fn-${n}">[${n}]</a></sup>`;
     })
     .replace(/\u0000(\d+)\u0000/g, (_, i) => codeSpans[parseInt(i, 10)]);
+
   const bodyHtml = marked.parse(bodyWithFootnotes, { async: false }) as string;
 
   // 元数据项

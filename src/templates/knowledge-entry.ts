@@ -419,7 +419,20 @@ export function generateKnowledgeEntryHtml(data: ArticleFormData): string {
       if (sec.domId === RELATED_SECTION.domId) {
         return `  <section id="${sec.domId}">\n    <h2>${sec.title}</h2>\n    ${relatedHtml || '<ul class="kh-related-list"></ul>'}\n  </section>`;
       }
-      const inner = (marked.parse(sec.markdown, { async: false }) as string).trim();
+      const normalized = (sec.markdown || '')
+        .replace(/(<div\s+class="[^"]*">)\n(?!\n)/gi, '$1\n\n')
+        .replace(/(?<!\n)\n(<\/div>)/gi, '\n\n$1');
+      const codeSpans: string[] = [];
+      const protectedMd = normalized.replace(
+        /(```[\s\S]*?```|`[^`\n]*`|\$\$[\s\S]*?\$\$|\$[^\$\n]+\$)/g,
+        (m) => {
+          codeSpans.push(m);
+          return `\u0000${codeSpans.length - 1}\u0000`;
+        },
+      );
+      const mathProtected = protectedMd.replace(/(\d)\*(\d)/g, '$1\\*$2');
+      const restored = mathProtected.replace(/\u0000(\d+)\u0000/g, (_, i) => codeSpans[parseInt(i, 10)]);
+      const inner = (marked.parse(restored, { async: false }) as string).trim();
       return `  <section id="${sec.domId}">\n    <h2>${escapeHtml(sec.title)}</h2>\n    ${inner}\n  </section>`;
     })
     .join('\n\n');

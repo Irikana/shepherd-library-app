@@ -106,7 +106,7 @@ const LIBRARY_ACTIONS: InsertAction[] = [
     label: '蓝框',
     display: '■ 蓝框',
     insert: (b, s) => {
-      const block = '<div class="function-box-blue">\n  §内容\n</div>';
+      const block = '<div class="function-box-blue">\n\n  §内容\n\n</div>';
       return snippetAction('蓝框', block).insert(b, s, s);
     },
   },
@@ -114,7 +114,7 @@ const LIBRARY_ACTIONS: InsertAction[] = [
     label: '灰引',
     display: '■ 灰引',
     insert: (b, s) => {
-      const block = '<div class="quote-box-grey">\n  §引用或参考内容\n</div>';
+      const block = '<div class="quote-box-grey">\n\n  §引用或参考内容\n\n</div>';
       return snippetAction('灰引', block).insert(b, s, s);
     },
   },
@@ -122,7 +122,7 @@ const LIBRARY_ACTIONS: InsertAction[] = [
     label: '红警',
     display: '▲ 红警',
     insert: (b, s) => {
-      const block = '<div class="notice-box-red">\n  §警告内容（请谨慎使用）\n</div>';
+      const block = '<div class="notice-box-red">\n\n  §警告内容（请谨慎使用）\n\n</div>';
       return snippetAction('红警', block).insert(b, s, s);
     },
   },

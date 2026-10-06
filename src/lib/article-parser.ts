@@ -626,15 +626,25 @@ export function updatePageTitle(html: string, title: string): string {
  */
 export function markdownToBodyHtml(markdown: string, footnotes: string[]): string {
   const codeSpans: string[] = [];
-  const protectedMd = (markdown ?? '').replace(
-    /(```[\s\S]*?```|`[^`\n]*`)/g,
+  // 1. 规范化提示框等自定义 div，确保其前后具有空行以便 marked 能正确解析内部的 Markdown 表格与列表
+  let normalized = (markdown ?? '')
+    .replace(/(<div\s+class="[^"]*">)\n(?!\n)/gi, '$1\n\n')
+    .replace(/(?<!\n)\n(<\/div>)/gi, '\n\n$1');
+
+  // 2. 保护代码块、行内代码、独立公式 $$...$$、行内公式 $...$，避免被 marked 或脚注替换破坏
+  const protectedMd = normalized.replace(
+    /(```[\s\S]*?```|`[^`\n]*`|\$\$[\s\S]*?\$\$|\$[^\$\n]+\$)/g,
     (m) => {
       codeSpans.push(m);
       return `\u0000${codeSpans.length - 1}\u0000`;
     },
   );
+
+  // 3. 保护普通数字相乘算式中的 *（如 30*4 自动转义为 30\*4，避免被 Markdown 误识别为斜体 <em>）
+  const mathProtected = protectedMd.replace(/(\d)\*(\d)/g, '$1\\*$2');
+
   const footnoteCount = footnotes?.length ?? 0;
-  const bodyWithFootnotes = protectedMd
+  const bodyWithFootnotes = mathProtected
     .replace(/\[\^(\d+)\]/g, (match, n: string) => {
       const idx = parseInt(n, 10);
       if (idx < 1 || idx > footnoteCount) return match;
