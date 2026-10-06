@@ -146,8 +146,8 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
     },
   );
 
-  // 4) 保护普通数字相乘算式中的 *（如 30*4 自动转义为 30\*4，避免被 Markdown 误识别为斜体 <em>）
-  const mathProtected = protectedMd.replace(/(\d)\*(\d)/g, '$1\\*$2');
+  // 4) 保护普通数字/算式中的乘号 *（如 30*4 自动转义为 30\*4，5*(8 转义为 5\*(8，避免被 Markdown 误识别为斜体 <em>）
+  const mathProtected = protectedMd.replace(/([\d\)])\s*\*+\s*([\d\(])/g, '$1\\*$2');
 
   const footnoteCount = data.footnotes?.length ?? 0;
   const bodyWithFootnotes = mathProtected
@@ -158,7 +158,8 @@ export function generateArticleHtml(data: ArticleFormData, categoryDir = 'paper'
     })
     .replace(/\u0000(\d+)\u0000/g, (_, i) => codeSpans[parseInt(i, 10)]);
 
-  const bodyHtml = marked.parse(bodyWithFootnotes, { async: false }) as string;
+  const rawBodyHtml = marked.parse(bodyWithFootnotes, { async: false }) as string;
+  const bodyHtml = rawBodyHtml.replace(/<table>([\s\S]*?)<\/table>/g, '<div class="sl-table-wrapper">\n<table>$1</table>\n</div>');
 
   // 元数据项
   const metaItems: string[] = [

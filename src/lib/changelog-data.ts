@@ -1871,5 +1871,51 @@ export const CHANGELOG_DATA: ChangelogEntry[] = [
         "text": "tag `v0.0.21`。"
       }
     ]
+  },
+  {
+    "key": "0.0.22",
+    "title": "0.0.22（2026-10-06）",
+    "blocks": [
+      {
+        "kind": "version",
+        "text": "0.0.22（2026-10-06）"
+      },
+      {
+        "kind": "section",
+        "text": "缺陷修复与优化"
+      },
+      {
+        "kind": "bullet",
+        "text": "**移动端表格响应式包裹**："
+      },
+      {
+        "kind": "bullet",
+        "text": "`article-parser.ts`、`templates/article.ts` 以及 `templates/knowledge-entry.ts` 在 Markdown 渲染为 HTML 后，自动为 `<table>` 元素包裹 `<div class=\"sl-table-wrapper\">` 响应式外层容器。"
+      },
+      {
+        "kind": "bullet",
+        "text": "配合主站 CSS，杜绝表格在手机等窄屏设备下撑破文章纸皮、触发浏览器整体缩放而破坏页面版心的问题，实现平滑横向滚动浏览。"
+      },
+      {
+        "kind": "bullet",
+        "text": "**数学算式乘法保护规则增强**："
+      },
+      {
+        "kind": "bullet",
+        "text": "增强 Markdown 预处理中的乘号防斜体正则（`replace(/([\\d\\)])\\s*\\*+\\s*([\\d\\(])/g, '$1\\\\*$2')`），全面覆盖带括号的乘算式（如 `5*(8`、`) * (` 等），彻底杜绝复杂长算式误触斜体。"
+      },
+      {
+        "kind": "section",
+        "text": "版本与构建"
+      },
+      {
+        "kind": "bullet",
+        "text": "版本号 `0.0.21` → `0.0.22`（`package.json` / `app.json` / `CHANGELOG-0.0.22.md` 三处同步），执行 `node scripts/gen-changelog.js` 重新生成 App 内置更新日志数据。"
+      },
+      {
+        "kind": "bullet",
+        "text": "tag `v0.0.22`。"
+      }
+    ]
   }
 ];

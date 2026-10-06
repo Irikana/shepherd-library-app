@@ -2,7 +2,7 @@
   "expo": {
     "name": "SlyWrite",
     "slug": "shepherd-library-app",
-    "version": "0.0.21",
+    "version": "0.0.22",
     "orientation": "portrait",
     "scheme": "shepherd-library",
     "userInterfaceStyle": "automatic",
